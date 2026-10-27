@@ -112,13 +112,14 @@ td input{min-width:200px;font-family:ui-monospace,monospace;font-size:.78rem}td 
 </div>
 <div class="bar"><input id="q" placeholder="Search brand or channel..."><button class="btn g" id="all">Find contacts for all</button><button class="btn g" id="ask">Copy contact request for Claude</button><button class="btn g" id="csv">Download CSV</button><button class="btn g" id="wipe">Clear all</button></div>
 <div class="cards" id="cards"></div><div class="empty" id="empty">No brands yet. Paste a channel above and press SCAN.</div>
-<p class="legal">Contact emails marked "guessed" are patterns, not confirmed addresses, so check them before you use them: a wrong guess bounces. Only addresses you type in count as contacts. Uses YouTube API Services: <a href="https://www.youtube.com/t/terms" target="_blank" rel="noreferrer">YouTube Terms</a> and <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">Google Privacy Policy</a>.</p>
+<p class="legal">Emails are shown only when they are printed on the brand's own website, and the page is named under each one. Some sites hide their emails, so "not found" is possible. If a brand has no partnership or marketing address, the support address is shown instead. Uses YouTube API Services: <a href="https://www.youtube.com/t/terms" target="_blank" rel="noreferrer">YouTube Terms</a> and <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">Google Privacy Policy</a>.</p>
 </main>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script>
 
+var CONTACT_API="PASTE_WORKER_URL_HERE";
 var S={rows:[],known:""},KEY="yqr:v2",YT="https://www.googleapis.com/youtube/v3",MAXV=2000;
 function $(i){return document.getElementById(i)}
 function msg(t){$("msg").textContent=t||""}
@@ -151,7 +152,7 @@ function detect(v){var lines=String(v.snippet.description||"").split(/\r?\n/),se
   lines.forEach(function(line,i){if(!TRIG.test(line))return;var ctx=line+" "+(lines[i+1]||""),dom=hostOf(ctx),cm=line.match(CODE)||ctx.match(CODE),am=line.match(AFTER),brand=am?cleanName(am[1]):"";
     if(!brand&&dom)brand=labelOf(dom);var key=norm(brand);if(!brand||key.length<3||seen[key])return;seen[key]=1;
     out.push({brand:brand,domain:dom,code:cm?cm[1]:"",video:{url:"https://www.youtube.com/watch?v="+v.id,title:v.snippet.title,date:(v.snippet.publishedAt||"").slice(0,10)}})});return out}
-function merge(dets,ch){dets.forEach(function(d){var n=norm(d.brand);if(n.length<3)return;var r=S.rows.filter(function(x){return norm(x.brand)===n})[0];
+function merge(dets0,ch){var dets=[];dets0.forEach(function(d){var p=d.brand.split(/\s+(?:&|and)\s+/i);p.forEach(function(b){dets.push({brand:b.trim(),domain:p.length>1?"":d.domain,code:d.code,video:d.video})})});dets.forEach(function(d){var n=norm(d.brand);if(n.length<3)return;var r=S.rows.filter(function(x){return norm(x.brand)===n})[0];
  if(!r){r={id:Date.now()+Math.random(),brand:d.brand,domain:"",channels:[],codes:[],videos:[],count:0,email:"",cname:"",status:"New"};S.rows.push(r)}
  if(!r.domain&&d.domain)r.domain=d.domain;if(r.channels.indexOf(ch)<0)r.channels.push(ch);if(d.code&&r.codes.indexOf(d.code)<0)r.codes.push(d.code);
  if(!r.videos.some(function(v){return v.url===d.video.url})){r.count++;if(r.videos.length<10)r.videos.push(d.video)}})}
@@ -169,19 +170,28 @@ $("scanBtn").onclick=function(){
         return yt("videos",{part:"snippet",id:ids.join(",")}).then(function(vv){(vv.items||[]).forEach(function(x){merge(detect(x),title)});got+=ids.length;save();draw();bar(got,target);return r.nextPageToken?page(r.nextPageToken):null})})}
     return page("")
   }).then(function(){bar(got,got);$("ptxt").textContent="Scanned "+got+" video"+(got===1?"":"s")+" from "+title+".";msg(got?"":"That channel has no public videos.")}).catch(function(e){msg(e.message)}).then(function(){b.disabled=false})};
-/* ---- contacts (free, in the browser) ---- */
+/* ---- contacts: real emails found on the brand's own website ---- */
 function mx(d){return fetch("https://dns.google/resolve?name="+encodeURIComponent(d)+"&type=MX").then(function(r){return r.json()}).then(function(j){return !!(j.Answer&&j.Answer.length)}).catch(function(){return false})}
 function cleanDom(s){s=String(s||"").toLowerCase().replace(/^https?:\/\//,"").replace(/^www\./,"").split("/")[0];return /^[a-z0-9.-]+\.[a-z]{2,}$/.test(s)?s:""}
-function enrich(r){r.busy=true;draw();var d=cleanDom(r.domain),src=d?"link in description":"",pr=Promise.resolve(d);
-  if(!d){var g=norm(r.brand)+".com";pr=mx(g).then(function(ok){if(ok){src="guessed from the name, check it";return g}return ""})}
-  return pr.then(function(dom){r.domain=dom;r.domainSource=src;r.linkedInSearchUrl="https://www.linkedin.com/search/results/people/?keywords="+encodeURIComponent(r.brand+" Partnerships Manager");
-    if(!dom){r.note="No website found. Type the brand's website in the box.";r.partnershipEmail=r.marketingEmail="";return}
-    r.partnershipEmail="partnerships@"+dom;r.marketingEmail="marketing@"+dom;
-    return mx(dom).then(function(ok){r.mailOk=ok;r.note=ok?"":"This domain has no mail records, so these guesses would bounce."})}).then(function(){r.busy=false;save();draw()})}
-$("all").onclick=function(){var l=S.rows.filter(function(r){return !r.linkedInSearchUrl});if(!l.length){msg("Every brand already has contact details.");return}
-  l.reduce(function(p,r){return p.then(function(){return enrich(r)})},Promise.resolve()).then(function(){msg("Contact lookup finished for "+l.length+" brand(s).")})};
+function liUrl(r){return "https://www.linkedin.com/search/results/people/?keywords="+encodeURIComponent(r.brand+" Partnerships Manager")}
+function enrich(r){
+  if(CONTACT_API.indexOf("PASTE")>-1){msg("Contact search is not connected yet.");return Promise.resolve()}
+  r.busy=true;draw();var d=cleanDom(r.domain),pr=Promise.resolve(d);
+  if(d)r.domainSource="link in description";
+  else{var g=norm(r.brand)+".com";pr=mx(g).then(function(ok){if(ok){r.domainSource="guessed from the name, check it";return g}return ""})}
+  return pr.then(function(dom){r.domain=dom;r.linkedInSearchUrl=liUrl(r);
+    if(!dom){r.found=null;r.note="No website found. Type the brand's website in the box, then press Find contacts.";return}
+    return firebase.auth().currentUser.getIdToken().then(function(t){return fetch(CONTACT_API+"?"+new URLSearchParams({domain:dom,brand:r.brand}),{headers:{Authorization:"Bearer "+t}})})
+      .then(function(x){return x.json().then(function(j){if(!x.ok)throw new Error(j.error||"Lookup failed");return j})})
+      .then(function(j){r.found=j;
+        if(!j.reachable)r.note="That website did not answer. Check the website address.";
+        else if(!j.best)r.note="No email is printed on this website ("+j.pagesChecked+" pages checked). Try LinkedIn, or send it to Claude chat.";
+        else{r.note="";if(!r.email){r.email=j.best.email;r.emailType=j.best.label}}})
+  }).catch(function(e){r.note=e.message}).then(function(){r.busy=false;save();draw()})}
+$("all").onclick=function(){var l=S.rows.filter(function(r){return !r.found});if(!l.length){msg("Every brand has already been searched.");return}
+  l.reduce(function(p,r){return p.then(function(){return enrich(r)})},Promise.resolve()).then(function(){msg("Contact search finished for "+l.length+" brand(s).")})};
 $("ask").onclick=function(){var l=S.rows.filter(function(r){return !okEmail(r.email)}).map(function(r){return "- "+r.brand+(r.domain?" ("+r.domain+")":"")+(r.channels.length?", seen with "+r.channels.join(", "):"")});
-  var t="Find the official partnership, influencer or marketing contact email for each brand below, using the brand's own website. Mark general inboxes like info@ or support@. Compare with my Leads sheet and suggest one creator from my roster for each.\n"+l.join("\n");
+  var t="Find the official partnership, marketing or support email for each brand below, using only emails printed on the brand's own website. Do not guess. Compare with my Leads sheet and suggest one creator from my roster for each.\n"+l.join("\n");
   (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){msg("Copied. Paste it into your Claude chat ("+l.length+" brands).")},function(){msg("Copy was blocked by the browser.")})};
 /* ---- cards ---- */
 function line(label,val,note){var d=mk("div",null,"blk");d.appendChild(mk("b",label));if(val){d.appendChild(mk("code",val));d.appendChild(mk("div",note,"guess"))}else d.appendChild(mk("span","Press Find contacts"));return d}
@@ -195,19 +205,21 @@ function draw(){
     var chips=mk("div");r.codes.slice(0,6).forEach(function(k){chips.appendChild(mk("span","Code "+k,"chip"))});c.appendChild(chips);
     var vd=mk("div",null,"blk");vd.appendChild(mk("b","Videos"));r.videos.slice(0,3).forEach(function(x){var a=mk("a",(x.date?x.date+"  ":"")+x.title);a.href=x.url;a.target="_blank";a.rel="noreferrer";a.style.display="block";a.style.color="inherit";vd.appendChild(a)});if(r.count>3)vd.appendChild(mk("small","+"+(r.count-3)+" more"));c.appendChild(vd);
     var dm=mk("input",null,"dm");dm.value=r.domain||"";dm.placeholder="brand website, e.g. brand.com";dm.setAttribute("aria-label","Website for "+r.brand);dm.onchange=function(){r.domain=cleanDom(dm.value);r.linkedInSearchUrl="";save();draw()};c.appendChild(dm);
-    c.appendChild(line("Partnership Email",r.partnershipEmail,"Guessed pattern, not confirmed"));c.appendChild(line("Marketing Email",r.marketingEmail,"Guessed pattern, not confirmed"));
-    if(r.partnershipEmail){var mo=mk("div",null,"blk");mo.appendChild(mk("b","Mail check"));mo.appendChild(mk("span",r.mailOk?"The website accepts email (this does not prove the mailbox exists).":"No mail records found for this website."));c.appendChild(mo)}
+    function cl(label,o){var d=mk("div",null,"blk");d.appendChild(mk("b",label));if(o&&o.email){var e=mk("code",o.email);e.className="good";d.appendChild(e);d.appendChild(mk("small","Found on "+String(o.page).replace(/^https?:\/\//,"")))}else d.appendChild(mk("span",r.found?"Not found on website":"Press Find contacts"));return d}
+    if(r.domainSource&&r.domain){var ds=mk("div",null,"blk");ds.appendChild(mk("small","Website: "+r.domain+" ("+r.domainSource+")"));c.appendChild(ds)}
+    c.appendChild(cl("Partnership Email",r.found&&r.found.partnership));c.appendChild(cl("Marketing / PR Email",r.found&&r.found.marketing));
+    if(r.found&&r.found.reachable&&!r.found.partnership&&!r.found.marketing)c.appendChild(cl("Support Email (fallback)",r.found.support));
     if(r.note){var n=mk("div",null,"blk");n.appendChild(mk("small",r.note));c.appendChild(n)}
     var cn=mk("input",null,"dm");cn.value=r.cname||"";cn.placeholder="Contact name (you add)";cn.setAttribute("aria-label","Contact name for "+r.brand);cn.onchange=function(){r.cname=cn.value.trim();save()};c.appendChild(cn);
-    var ue=mk("input",null,"dm");ue.type="email";ue.value=r.email||"";ue.placeholder="Confirmed contact email (you add)";ue.setAttribute("aria-label","Contact email for "+r.brand);ue.onchange=function(){r.email=ue.value.trim();save();draw()};c.appendChild(ue);
+    var ue=mk("input",null,"dm");ue.type="email";ue.value=r.email||"";ue.placeholder="Confirmed contact email (you add)";ue.setAttribute("aria-label","Contact email for "+r.brand);ue.onchange=function(){r.email=ue.value.trim();save();draw()};c.appendChild(ue);if(r.emailType&&r.email)c.appendChild(mk("small","Filled from the website: "+r.emailType));
     var a=mk("div",null,"act"),f=mk("button",r.busy?"Looking...":"Find contacts");f.disabled=!!r.busy;f.onclick=function(){enrich(r)};a.appendChild(f);
     var li=mk("a","Search on LinkedIn");li.href=r.linkedInSearchUrl||("https://www.linkedin.com/search/results/people/?keywords="+encodeURIComponent(r.brand+" Partnerships Manager"));li.target="_blank";li.rel="noreferrer";a.appendChild(li);
     var m=mk("a","Email Now");if(okEmail(r.email)){m.href="mailto:"+r.email+"?subject="+encodeURIComponent("An idea for "+r.brand+"'s next campaign")}else m.className="off";a.appendChild(m);
     var d=mk("button","Remove");d.onclick=function(){S.rows=S.rows.filter(function(x){return x!==r});save();draw()};a.appendChild(d);c.appendChild(a);box.appendChild(c)})}
 $("q").oninput=draw;
 function q(v){return '"'+String(v==null?"":v).replace(/"/g,'""')+'"'}
-$("csv").onclick=function(){var h=["Brand","Domain","Channels","Sponsored videos","Codes","Partnership email (guessed)","Marketing email (guessed)","Contact name","Contact email","linkedInSearchUrl","Status"],
-  L=[h.map(q).join(",")].concat(S.rows.map(function(r){return [r.brand,r.domain,r.channels.join("; "),r.count,r.codes.join("; "),r.partnershipEmail,r.marketingEmail,r.cname,r.email,r.linkedInSearchUrl||("https://www.linkedin.com/search/results/people/?keywords="+encodeURIComponent(r.brand+" Partnerships Manager")),r.status].map(q).join(",")}));
+$("csv").onclick=function(){var h=["Brand","Domain","Channels","Sponsored videos","Codes","Partnership email (found)","Marketing email (found)","Support email (found)","Best contact","Best contact type","Found on page","Contact name","Contact email","linkedInSearchUrl","Status"],
+  L=[h.map(q).join(",")].concat(S.rows.map(function(r){var f=r.found||{},b=f.best||{};return [r.brand,r.domain,r.channels.join("; "),r.count,r.codes.join("; "),f.partnership&&f.partnership.email,f.marketing&&f.marketing.email,f.support&&f.support.email,b.email,b.label,b.page,r.cname,r.email,r.linkedInSearchUrl||liUrl(r),r.status].map(q).join(",")}));
   var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([L.join("\n")],{type:"text/csv"}));a.download="yaqubu-radar.csv";document.body.appendChild(a);a.click();a.remove()};
 $("wipe").onclick=function(){if(S.rows.length&&confirm("Remove all saved brands from this device?")){S.rows=[];save();draw()}};
 $("ytst").textContent=ytKey()?"Key saved on this device.":"No key saved yet.";
