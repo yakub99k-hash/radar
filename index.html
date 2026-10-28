@@ -212,6 +212,7 @@ function draw(){
     c.appendChild(cl("Partnership Email",r.found&&r.found.partnership));c.appendChild(cl("Marketing / PR Email",r.found&&r.found.marketing));
     if(r.found&&r.found.reachable&&!r.found.partnership&&!r.found.marketing)c.appendChild(cl("Support Email (fallback)",r.found.support));
     if(r.note){var n=mk("div",null,"blk");n.appendChild(mk("small",r.note));c.appendChild(n)}
+    if(r.found&&r.found.reachable&&!r.found.best){var lk=(r.found.programs||[]).concat(r.found.contactPages||[]);if(lk.length){var pl=mk("div",null,"blk");pl.appendChild(mk("b","Pages to try (forms or creator programs)"));lk.forEach(function(u){var a2=mk("a",String(u).replace(/^https?:\/\//,""));a2.href=u;a2.target="_blank";a2.rel="noreferrer";a2.style.display="block";pl.appendChild(a2)});c.appendChild(pl)}}
     var cn=mk("input",null,"dm");cn.value=r.cname||"";cn.placeholder="Contact name (you add)";cn.setAttribute("aria-label","Contact name for "+r.brand);cn.onchange=function(){r.cname=cn.value.trim();save()};c.appendChild(cn);
     var ue=mk("input",null,"dm");ue.type="email";ue.value=r.email||"";ue.placeholder="Confirmed contact email (you add)";ue.setAttribute("aria-label","Contact email for "+r.brand);ue.onchange=function(){r.email=ue.value.trim();save();draw()};c.appendChild(ue);if(r.emailType&&r.email)c.appendChild(mk("small","Filled from the website: "+r.emailType));
     var a=mk("div",null,"act"),f=mk("button",r.busy?"Looking...":"Find contacts");f.disabled=!!r.busy;f.onclick=function(){enrich(r)};a.appendChild(f);
