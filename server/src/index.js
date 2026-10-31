@@ -44,7 +44,8 @@ function buildServices(config, logger, options = {}) {
       allowAcceptAll: config.pipeline.allowAcceptAll,
       requireBrandDomain: config.pipeline.requireBrandDomain,
       negativeCacheTtlMs: config.pipeline.negativeCacheTtlMs,
-      acceptStatuses: config.hunter.acceptStatuses
+      acceptStatuses: config.hunter.acceptStatuses,
+      domainSearchLimit: config.hunter.domainSearchLimit
     }
   });
 
@@ -74,7 +75,7 @@ function main() {
   const summary = configSummary(config);
 
   if (!summary.apollo) {
-    logger.warn('APOLLO_API_KEY is missing: /api/brand-contact will answer 503 until it is set.');
+    logger.warn('APOLLO_API_KEY is missing: using the Hunter domain search pipeline instead.');
   }
   if (!summary.hunter) {
     logger.warn('HUNTER_API_KEY is missing: /api/brand-contact will answer 503 until it is set.');

@@ -74,7 +74,9 @@ function buildConfig(env = process.env) {
         s.toLowerCase()
       ),
       pollAttempts: Math.min(Math.max(toInt(env.HUNTER_POLL_ATTEMPTS, 3), 1), 10),
-      pollDelayMs: Math.max(toInt(env.HUNTER_POLL_DELAY_MS, 1500), 250)
+      pollDelayMs: Math.max(toInt(env.HUNTER_POLL_DELAY_MS, 1500), 250),
+      // Rows requested from /v2/domain-search when Hunter does the work alone.
+      domainSearchLimit: Math.min(Math.max(toInt(env.HUNTER_DOMAIN_SEARCH_LIMIT, 10), 1), 100)
     },
 
     pipeline: {

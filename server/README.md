@@ -10,16 +10,40 @@ scrapes the website, this service is the automatic fallback.
 frontend (index.html)
    │  GET /api/brand-contact?domain=brand.com&brand=Brand
    ▼
-1. Apollo  POST /mixed_people/api_search      (0 credits)  titles: Influencer Marketing,
-                                                            Partnerships, Creator Relations,
-                                                            Social Media Manager
-2. rank    title scoring -> best person first
-3. Apollo  POST /people/match                 (~1 credit)  full name + LinkedIn URL
-4. Hunter  GET  /v2/email-finder              (1 credit)   email for that person
-5. Hunter  GET  /v2/email-verifier            (1 credit)   status must be valid/deliverable
-6. filter  info@, press@, support@ ... -> marked as "fallback", never returned as a person
+A. Apollo path (used when Apollo answers)
+   1. Apollo  POST /mixed_people/api_search      (0 credits)  titles: Influencer Marketing,
+                                                             Partnerships, Creator Relations,
+                                                             Social Media Manager
+   2. rank    title scoring -> best person first
+   3. Apollo  POST /people/match                 (~1 credit)  full name + LinkedIn URL
+   4. Hunter  GET  /v2/email-finder              (1 credit)   email for that person
+   5. Hunter  GET  /v2/email-verifier            (1 credit)   status must be valid/deliverable
+
+B. Hunter path (Apollo missing, placeholder key, outage, or knows nobody)
+   1. Hunter  GET  /v2/domain-search             (1 credit)   every address Hunter knows
+   2. rank    same title scoring -> named contacts before info@ / press@
+   3. verify  reuse the status domain search returned, else /v2/email-verifier
+
+6. filter  off-domain addresses, and info@, press@, support@ ... -> marked as "fallback",
+           never returned as a person
 7. JSON    { contact_name, title, email, email_status, linkedin_url, found, ... }
 ```
+
+Both paths return the same JSON shape, so the frontend needs no extra handling.
+`meta.strategy` tells you which one answered (`apollo+hunter` or
+`hunter-domain-search`); when Apollo failed, `meta.apollo_error` carries the reason.
+
+## Hunter-only mode
+
+A missing or rejected `APOLLO_API_KEY` is **not** an error: the pipeline switches
+to Hunter's domain search, which returns people, job titles, LinkedIn profiles and
+(often) a verification status in one call. Job titles are ranked with the same
+rules as Apollo, addresses off the brand domain are dropped, and only the best
+few are verified - and only when domain search did not already report a status.
+That keeps the credit cost at roughly one domain search plus one verification.
+
+A real 503 is only returned when *neither* provider can answer (for example
+`HUNTER_API_KEY` is missing too).
 
 ## Why two Apollo calls?
 
@@ -139,6 +163,7 @@ Leave it empty and the frontend simply skips the automatic step.
 | `HTTP_TIMEOUT_MS` / `HTTP_RETRIES` | `15000` / `2` | outbound HTTP policy |
 | `HUNTER_POLL_ATTEMPTS` / `HUNTER_POLL_DELAY_MS` | `3` / `1500` | retries while Hunter verifies (HTTP 202) |
 | `MIN_TITLE_SCORE` | `25` | drop irrelevant titles before spending credits |
+| `HUNTER_DOMAIN_SEARCH_LIMIT` | `10` | rows requested from `/v2/domain-search` in Hunter-only mode |
 
 ## Credit safety
 

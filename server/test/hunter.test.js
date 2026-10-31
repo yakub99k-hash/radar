@@ -174,3 +174,73 @@ test('verifyEmail treats HTTP 451 as blocked instead of throwing', async () => {
   assert.equal(verification.block, true);
   assert.equal(verification.status, 'unknown');
 });
+
+test('domainSearch lists the addresses Hunter knows for a domain', async () => {
+  const fetchImpl = sequenceFetch([
+    {
+      body: {
+        data: {
+          domain: 'brand.com',
+          organization: 'Brand',
+          pattern: '{first}.{last}',
+          accept_all: false,
+          emails: [
+            {
+              value: 'Jane.Doe@Brand.com',
+              type: 'personal',
+              confidence: 95,
+              first_name: 'Jane',
+              last_name: 'Doe',
+              position: 'Influencer Marketing Manager',
+              seniority: 'senior',
+              department: 'marketing',
+              linkedin: 'https://www.linkedin.com/in/jane-doe-4a7c21',
+              verification: { status: 'valid' },
+              sources: [{ uri: 'https://brand.com/team' }]
+            },
+            { value: 'press@brand.com', type: 'generic', confidence: 70 },
+            { value: '', type: 'personal' }
+          ]
+        }
+      }
+    }
+  ]);
+  const hunter = createHunterClient({ apiKey: 'hunter-key', fetchImpl, logger: silentLogger, retries: 0 });
+
+  const result = await hunter.domainSearch({ domain: 'brand.com', limit: 5 });
+
+  const url = new URL(fetchImpl.calls[0].url);
+  assert.equal(url.origin + url.pathname, 'https://api.hunter.io/v2/domain-search');
+  assert.equal(url.searchParams.get('domain'), 'brand.com');
+  assert.equal(url.searchParams.get('limit'), '5');
+  assert.equal(url.searchParams.get('api_key'), null, 'the key never travels in the URL');
+  assert.equal(fetchImpl.calls[0].options.headers['X-API-KEY'], 'hunter-key');
+
+  // Rows without an address are dropped.
+  assert.equal(result.emails.length, 2);
+  assert.equal(result.emails[0].email, 'jane.doe@brand.com');
+  assert.equal(result.emails[0].firstName, 'Jane');
+  assert.equal(result.emails[0].position, 'Influencer Marketing Manager');
+  assert.equal(result.emails[0].linkedinUrl, 'https://www.linkedin.com/in/jane-doe-4a7c21');
+  assert.equal(result.emails[0].verification.status, 'valid');
+  assert.equal(result.emails[1].type, 'generic');
+  assert.equal(result.pattern, '{first}.{last}');
+});
+
+test('domainSearch returns null on a 404 (no addresses on file)', async () => {
+  const fetchImpl = sequenceFetch([
+    { status: 404, body: { errors: [{ details: 'No emails found' }] } }
+  ]);
+  const hunter = createHunterClient({ apiKey: 'k', fetchImpl, logger: silentLogger, retries: 0 });
+
+  assert.equal(await hunter.domainSearch({ domain: 'brand.com' }), null);
+});
+
+test('domainSearch needs a domain', async () => {
+  const hunter = createHunterClient({ apiKey: 'k', logger: silentLogger });
+  await assert.rejects(
+    () => hunter.domainSearch({}),
+    (err) => err.status === 400 && err.code === 'HUNTER_BAD_INPUT'
+  );
+});
+

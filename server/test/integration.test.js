@@ -36,6 +36,9 @@ function startMockUpstream(state) {
         res.end(JSON.stringify(payload));
       };
 
+      if (state.apolloStatus && url.pathname.startsWith('/api/v1/')) {
+        return send(state.apolloStatus, { error: 'Invalid API key', error_code: 'invalid_api_key' });
+      }
       if (url.pathname === '/api/v1/mixed_people/api_search') {
         return send(200, {
           total_entries: 2,
@@ -52,6 +55,32 @@ function startMockUpstream(state) {
             name: 'Jane Doe',
             title: 'Influencer Marketing Manager',
             linkedin_url: 'https://www.linkedin.com/in/jane-doe-4a7c21'
+          }
+        });
+      }
+      if (url.pathname === '/v2/domain-search') {
+        return send(200, {
+          data: {
+            domain: url.searchParams.get('domain'),
+            pattern: '{first}',
+            emails: [
+              {
+                value: 'press@brand.com',
+                type: 'generic',
+                confidence: 60,
+                verification: { status: 'valid' }
+              },
+              {
+                value: 'Jane.Doe@Brand.com',
+                type: 'personal',
+                confidence: 93,
+                first_name: 'Jane',
+                last_name: 'Doe',
+                position: 'Influencer Marketing Manager',
+                linkedin: 'https://www.linkedin.com/in/jane-doe-4a7c21',
+                verification: { status: 'valid' }
+              }
+            ]
           }
         });
       }
@@ -99,7 +128,7 @@ function listen(app) {
   });
 }
 
-async function boot(state) {
+async function boot(state, overrides = {}) {
   const upstream = await startMockUpstream(state);
   const config = buildConfig({
     APOLLO_API_KEY: 'apollo-test-key',
@@ -108,7 +137,8 @@ async function boot(state) {
     HUNTER_BASE_URL: upstream.baseUrl,
     ALLOWED_ORIGINS: 'https://radar.yaqubu.com',
     HTTP_RETRIES: '0',
-    HUNTER_POLL_DELAY_MS: '250'
+    HUNTER_POLL_DELAY_MS: '250',
+    ...overrides
   });
   const services = buildServices(config, silentLogger);
   const app = createApp({
@@ -187,3 +217,43 @@ test('an unverifiable email produces a graceful, cacheable answer', async () => 
     await close();
   }
 });
+
+test('a rejected Apollo key still answers through the Hunter domain search over HTTP', async () => {
+  // 401 = what a placeholder APOLLO_API_KEY produces on Render today.
+  const state = {
+    requests: [],
+    apolloStatus: 401,
+    verification: { status: 'valid', result: 'deliverable' }
+  };
+  const { server, close } = await boot(state);
+
+  try {
+    const res = await fetch(`${server.url}/api/brand-contact?domain=brand.com&brand=Brand`, {
+      headers: { Origin: 'https://radar.yaqubu.com' }
+    });
+    const body = await res.json();
+
+    assert.equal(res.status, 200, 'a broken Apollo key is not an error any more');
+    assert.equal(body.found, true);
+    assert.equal(body.email, 'jane.doe@brand.com');
+    assert.equal(body.contact_name, 'Jane Doe');
+    assert.equal(body.title, 'Influencer Marketing Manager');
+    assert.equal(body.email_status, 'valid');
+    assert.equal(body.linkedin_url, 'https://www.linkedin.com/in/jane-doe-4a7c21');
+    assert.equal(body.meta.strategy, 'hunter-domain-search');
+    assert.match(body.meta.apollo_error, /Apollo rejected the API key/);
+
+    const search = state.requests.find((r) => r.path === '/v2/domain-search');
+    assert.ok(search, 'Hunter domain search was called');
+    assert.equal(search.query.domain, 'brand.com');
+    assert.equal(search.headers['x-api-key'], 'hunter-test-key');
+    assert.equal(search.query.api_key, undefined, 'the key stays out of the URL');
+
+    // Domain search already said "valid", so no paid verifier call was made.
+    assert.equal(state.requests.filter((r) => r.path === '/v2/email-verifier').length, 0);
+    assert.equal(state.requests.filter((r) => r.path === '/api/v1/people/match').length, 0);
+  } finally {
+    await close();
+  }
+});
+
