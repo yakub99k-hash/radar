@@ -104,7 +104,17 @@ td input{min-width:200px;font-family:ui-monospace,monospace;font-size:.78rem}td 
 <li>Paste the key above and press Save key. Never post it publicly.</li></ol></details>
 </div>
 <div class="card">
-<h2>2. Scan a channel</h2>
+<h2>2. Your Hunter.io API key</h2>
+<p class="hint">Optional. Contacts are found with the site owner's Hunter credits by default; paste your own free key and the searches use your account instead. It is saved on this device only. <span id="hukst"></span></p>
+<div class="scanrow"><input id="huk" type="password" placeholder="Paste your Hunter.io API key" autocomplete="off"><button class="btn g" id="hukSave">Save key</button></div>
+<details><summary>How to get a free Hunter API key</summary><ol style="margin:8px 0 0;padding-left:18px;color:var(--mu);font-size:.84rem">
+<li>Go to hunter.io and sign up (the free plan includes a monthly search allowance).</li>
+<li>Open the Dashboard, then the API section in the left sidebar, and copy your API key.</li>
+<li>Paste the key above and press Save key. Never post it publicly.</li>
+<li>Clear the box and press Save key to forget it on this device.</li></ol></details>
+</div>
+<div class="card">
+<h2>3. Scan a channel</h2>
 <p class="hint">Reads video descriptions for sponsors, codes and links. A channel with 1 video scans 1, one with 500 scans 500, and anything above 2000 scans the newest 2000.</p>
 <div class="scanrow"><input id="ch" placeholder="Paste YouTube Channel @handle or URL"><button class="btn" id="scanBtn">SCAN</button></div>
 <div class="prog" id="prog" hidden><div id="fill"></div></div><div id="ptxt" class="hint" style="margin-top:6px"></div>
@@ -136,6 +146,10 @@ function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function okEmail(e){return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e||"")}
 function mk(tag,txt,cls){var e=document.createElement(tag);if(txt!=null)e.textContent=txt;if(cls)e.className=cls;return e}
 function ytKey(){try{return localStorage.getItem("yqr:ytkey")||""}catch(e){return ""}}
+/* Each visitor can bring their own Hunter.io key; it is sent per request only. */
+function hunterKey(){try{return localStorage.getItem("yqr:hunterkey")||""}catch(e){return ""}}
+function hukStatus(){var t=$("hukst");if(t)t.textContent=hunterKey()?"Your key is saved on this device.":"No key saved, so the shared key is used."}
+$("hukSave").onclick=function(){try{var v=$("huk").value.trim();if(v)localStorage.setItem("yqr:hunterkey",v);else localStorage.removeItem("yqr:hunterkey")}catch(e){}$("huk").value="";hukStatus()};
 $("ytSave").onclick=function(){try{localStorage.setItem("yqr:ytkey",$("ytk").value.trim())}catch(e){}$("ytk").value="";$("ytst").textContent=ytKey()?"Key saved on this device.":"No key saved."};
 function yt(path,p){var k=ytKey();if(!k)return Promise.reject(new Error("Save your YouTube API key in the box above first."));p.key=k;
   return fetch(YT+"/"+path+"?"+new URLSearchParams(p)).then(function(r){return r.json().then(function(j){if(!r.ok){var e=j.error||{},m=e.message||"",why=e.errors&&e.errors[0]&&e.errors[0].reason;
@@ -183,27 +197,41 @@ $("scanBtn").onclick=function(){
 function mx(d){return fetch("https://dns.google/resolve?name="+encodeURIComponent(d)+"&type=MX").then(function(r){return r.json()}).then(function(j){return !!(j.Answer&&j.Answer.length)}).catch(function(){return false})}
 function cleanDom(s){s=String(s||"").toLowerCase().replace(/^https?:\/\//,"").replace(/^www\./,"").split("/")[0];return /^[a-z0-9.-]+\.[a-z]{2,}$/.test(s)?s:""}
 function liUrl(r){return "https://www.linkedin.com/search/results/people/?keywords="+encodeURIComponent(r.brand+" Partnerships Manager")}
-/* Asks the fallback backend (Apollo + Hunter) for a named contact. */
-function autoContact(dom,brand){
+/* Any page text the website scraper returned, so the backend can hand it to the
+   AI step instead of downloading the site again. Returns "" when absent. */
+function scrapedText(f){
+  if(!f)return "";
+  var parts=[],push=function(v){if(typeof v==="string"&&v.trim())parts.push(v)};
+  push(f.text);push(f.pageText);push(f.page_text);push(f.snippet);push(f.content);
+  if(Array.isArray(f.pages))f.pages.forEach(function(p){if(p&&typeof p==="object"){push(p.text);push(p.content)}else push(p)});
+  return parts.join("\n").slice(0,40000);
+}
+/* Asks the fallback backend (Gemini + Apollo + Hunter) for a named contact. */
+function autoContact(dom,brand,text){
   if(!CONTACT_FALLBACK_API)return Promise.resolve(null);
   /* Tolerate a trailing slash, a "/api" suffix, or the full endpoint path. */
   var root=CONTACT_FALLBACK_API.trim().replace(/\/+$/,"").replace(/\/api\/brand-contact$/i,"").replace(/\/api$/i,"");
-  var u=root+"/api/brand-contact?"+new URLSearchParams({domain:dom,brand:brand||""});
+  var u=root+"/api/brand-contact",body={domain:dom,brand:brand||""},t2=String(text||"").trim();
+  if(t2)body.pageText=t2;
   return firebase.auth().currentUser.getIdToken().then(function(t){
-    /* The backend already answers CORS itself (Access-Control-Allow-Origin: *
-       and Access-Control-Allow-Headers: Authorization), so nothing is added to
+    /* The backend answers CORS itself (Access-Control-Allow-Origin: * and
+       Allow-Headers: Authorization + X-Hunter-Api-Key), so nothing is added to
        the request here - sending an "Access-Control-*" request header would
        actually break the preflight. credentials:"omit" keeps the request
        compatible with that "*" origin. */
-    return fetch(u,{mode:"cors",credentials:"omit",cache:"no-store",headers:{Authorization:"Bearer "+t,Accept:"application/json"}})
+    var h={"Content-Type":"application/json",Accept:"application/json",Authorization:"Bearer "+t};
+    /* The visitor's own Hunter key, when they saved one, is used for this request. */
+    var k=hunterKey();if(k)h["x-hunter-api-key"]=k;
+    return fetch(u,{method:"POST",mode:"cors",credentials:"omit",cache:"no-store",headers:h,body:JSON.stringify(body)})
   }).then(function(x){return x.json().then(function(j){if(!x.ok)throw new Error(j.error||"Automatic contact lookup failed.");return j})})
     .catch(function(e){return {found:false,reason:"REQUEST_FAILED",message:e.message||"Automatic contact lookup failed."}})
 }
 function applyAuto(r,a){
   if(!a)return;
   r.auto=a;
-  if(a.is_fallback&&!okEmail(r.email)&&a.email){r.email=a.email;r.emailType="Auto (generic mailbox)"}
-  if(a.found&&okEmail(a.email)){if(!r.email){r.email=a.email;r.emailType="Auto via Apollo + Hunter"}if(!r.cname&&a.contact_name)r.cname=a.contact_name}
+  var viaAI=a.email_source==="gemini";
+  if(a.is_fallback&&!okEmail(r.email)&&a.email){r.email=a.email;r.emailType=viaAI?"Gemini (generic mailbox)":"Auto (generic mailbox)"}
+  if(a.found&&okEmail(a.email)){if(!r.email){r.email=a.email;r.emailType=viaAI?"Gemini (website text)":"Auto via Apollo + Hunter"}if(!r.cname&&a.contact_name)r.cname=a.contact_name}
   if(a.email||a.message)r.note=(a.found?a.message||"Found a contact automatically.":(a.message||r.note))
 }
 function enrich(r){
@@ -219,13 +247,13 @@ function enrich(r){
         if(!j.reachable)r.note="That website did not answer. Check the website address.";
         else if(!j.best)r.note="No email is printed on this website ("+j.pagesChecked+" pages checked). Try LinkedIn, or send it to Claude chat.";
         else{r.note="";if(!r.email){r.email=j.best.email;r.emailType=j.best.label}}
-        if(!j.best)return autoContact(dom,r.brand).then(function(a){applyAuto(r,a)})})
+        if(!j.best)return autoContact(dom,r.brand,scrapedText(j)).then(function(a){applyAuto(r,a)})})
       .catch(function(e){
         /* Scraper failed (offline, CORS, 5xx): we still have no email, so ask
            the fallback backend before giving up. */
         r.found=null;r.note=e.message||"Lookup failed.";
         if(!CONTACT_FALLBACK_API||!dom)return;
-        return autoContact(dom,r.brand).then(function(a){applyAuto(r,a)})})
+        return autoContact(dom,r.brand,scrapedText(r.found)).then(function(a){applyAuto(r,a)})})
   }).catch(function(e){r.note=e.message}).then(function(){r.busy=false;save();draw()})}
 $("all").onclick=function(){var l=S.rows.filter(function(r){return !r.found});if(!l.length){msg("Every brand has already been searched.");return}
   l.reduce(function(p,r){return p.then(function(){return enrich(r)})},Promise.resolve()).then(function(){msg("Contact search finished for "+l.length+" brand(s).")})};
@@ -248,7 +276,7 @@ function draw(){
     if(r.domainSource&&r.domain){var ds=mk("div",null,"blk");ds.appendChild(mk("small","Website: "+r.domain+" ("+r.domainSource+")"));c.appendChild(ds)}
     c.appendChild(cl("Partnership Email",r.found&&r.found.partnership));c.appendChild(cl("Marketing / PR Email",r.found&&r.found.marketing));
     if(r.found&&r.found.reachable&&!r.found.partnership&&!r.found.marketing)c.appendChild(cl("Support Email (fallback)",r.found.support));
-    if(r.auto&&(r.auto.contact_name||r.auto.email||r.auto.linkedin_url)){var ab=mk("div",null,"blk");ab.appendChild(mk("b",r.auto.is_fallback?"Auto contact (fallback mailbox)":"Auto contact (Apollo + Hunter)"));
+    if(r.auto&&(r.auto.contact_name||r.auto.email||r.auto.linkedin_url)){var ab=mk("div",null,"blk");ab.appendChild(mk("b",r.auto.is_fallback?"Auto contact (fallback mailbox)":(r.auto.email_source==="gemini"?"Auto contact (Gemini AI)":"Auto contact (Apollo + Hunter)")));
       if(r.auto.contact_name)ab.appendChild(mk("code",r.auto.contact_name));
       ab.appendChild(mk("small",(r.auto.title||"Contact")+(r.auto.email_status?" · "+r.auto.email_status:"")));
       if(r.auto.linkedin_url){var la=mk("a","LinkedIn profile");la.href=r.auto.linkedin_url;la.target="_blank";la.rel="noreferrer";la.style.display="block";ab.appendChild(la)}
@@ -268,6 +296,7 @@ $("csv").onclick=function(){var h=["Brand","Domain","Channels","Sponsored videos
   var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([L.join("\n")],{type:"text/csv"}));a.download="yaqubu-radar.csv";document.body.appendChild(a);a.click();a.remove()};
 $("wipe").onclick=function(){if(S.rows.length&&confirm("Remove all saved brands from this device?")){S.rows=[];save();draw()}};
 $("ytst").textContent=ytKey()?"Key saved on this device.":"No key saved yet.";
+hukStatus();
 
 /* ---------- ACCOUNTS (Firebase Authentication) ---------- */
 /* PASTE YOUR FIREBASE SETTINGS HERE (see the setup steps). Leave the quotes. */

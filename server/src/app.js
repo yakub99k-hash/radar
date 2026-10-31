@@ -3,6 +3,11 @@
 const express = require('express');
 const { AppError } = require('./errors');
 
+/** Browsers send their own Hunter key in this header (never in the URL). */
+const HUNTER_KEY_HEADER = 'x-hunter-api-key';
+const MAX_PAGE_TEXT_CHARS = 40000;
+const MAX_HUNTER_KEY_CHARS = 200;
+
 /** CORS that matches the static frontend (GitHub Pages + local dev). */
 function corsMiddleware(allowedOrigins) {
   const allowed = Array.isArray(allowedOrigins) ? allowedOrigins : [];
@@ -15,7 +20,8 @@ function corsMiddleware(allowedOrigins) {
       res.setHeader('Vary', 'Origin');
     }
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Authorization,Content-Type');
+    // X-Hunter-Api-Key lets a user spend their own Hunter credits from the browser.
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization,Content-Type,X-Hunter-Api-Key');
     res.setHeader('Access-Control-Max-Age', '600');
     if (req.method === 'OPTIONS') return res.status(204).end();
     return next();
@@ -49,7 +55,8 @@ function createApp(deps = {}) {
   if (config.trustProxy) app.set('trust proxy', true);
 
   app.use(corsMiddleware(config.cors && config.cors.allowedOrigins));
-  app.use(express.json({ limit: '16kb' }));
+  // Page text for the Gemini step can be a few tens of kB.
+  app.use(express.json({ limit: '256kb' }));
 
   // Compact request log without tokens or query secrets.
   app.use((req, res, next) => {
@@ -71,6 +78,7 @@ function createApp(deps = {}) {
     version,
     apollo: Boolean(config.apollo && config.apollo.apiKey),
     hunter: Boolean(config.hunter && config.hunter.apiKey),
+    gemini: Boolean(config.gemini && config.gemini.apiKey),
     auth: Boolean(config.auth && config.auth.requireAuth),
     uptime_s: Math.round(process.uptime())
   };
@@ -102,7 +110,25 @@ function createApp(deps = {}) {
         });
       }
 
-      const result = await pipeline.findContact({ domain, brand });
+      // A user's own Hunter key wins over the server's key for this request only.
+      const allowUserKey = !(config.hunter && config.hunter.allowUserKey === false);
+      const hunterApiKey = allowUserKey
+        ? firstValue(req.get(HUNTER_KEY_HEADER), source.hunter_api_key, source.hunterApiKey).slice(
+            0,
+            MAX_HUNTER_KEY_CHARS
+          )
+        : '';
+
+      // Page text the browser already scraped, so Gemini can look for hidden emails.
+      const pageText = String(
+        firstValue(source.pageText, source.page_text, source.website_text, source.text)
+      ).slice(0, MAX_PAGE_TEXT_CHARS);
+
+      const params = { domain, brand };
+      if (hunterApiKey) params.hunterApiKey = hunterApiKey;
+      if (pageText) params.pageText = pageText;
+
+      const result = await pipeline.findContact(params);
       res.setHeader('Cache-Control', 'no-store');
       res.json(result);
     } catch (err) {

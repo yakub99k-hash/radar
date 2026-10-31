@@ -182,3 +182,94 @@ test('unknown routes 404 as JSON', async () => {
     await server.close();
   }
 });
+
+test("a user's Hunter key and page text reach the pipeline", async () => {
+  const calls = [];
+  const pipeline = {
+    async findContact(params) {
+      calls.push(params);
+      return FOUND;
+    }
+  };
+  const server = await listen(createApp({ config: baseConfig, pipeline }));
+  try {
+    const get = await fetch(`${server.url}/api/brand-contact?domain=brand.com&brand=Brand`, {
+      headers: { 'x-hunter-api-key': 'user-key-9', Origin: 'https://radar.yaqubu.com' }
+    });
+    assert.equal(get.status, 200);
+    assert.equal(calls[0].hunterApiKey, 'user-key-9');
+    assert.deepEqual(Object.keys(calls[0]).sort(), ['brand', 'domain', 'hunterApiKey']);
+
+    const post = await fetch(`${server.url}/api/brand-contact`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-hunter-api-key': 'user-key-9' },
+      body: JSON.stringify({
+        domain: 'brand.com',
+        brand: 'Brand',
+        pageText: 'p'.repeat(120)
+      })
+    });
+    assert.equal(post.status, 200);
+    assert.equal(calls[1].pageText.length, 120);
+    assert.equal(calls[1].hunterApiKey, 'user-key-9');
+  } finally {
+    await server.close();
+  }
+});
+
+test('without the header the pipeline gets no per-request key', async () => {
+  const calls = [];
+  const pipeline = {
+    async findContact(params) {
+      calls.push(params);
+      return FOUND;
+    }
+  };
+  const server = await listen(createApp({ config: baseConfig, pipeline }));
+  try {
+    await fetch(`${server.url}/api/brand-contact?domain=brand.com&brand=Brand`);
+    assert.deepEqual(calls[0], { domain: 'brand.com', brand: 'Brand' });
+  } finally {
+    await server.close();
+  }
+});
+
+test('ALLOW_USER_HUNTER_KEY=false ignores a browser key', async () => {
+  const calls = [];
+  const pipeline = {
+    async findContact(params) {
+      calls.push(params);
+      return FOUND;
+    }
+  };
+  const config = { ...baseConfig, hunter: { apiKey: 'h', allowUserKey: false } };
+  const server = await listen(createApp({ config, pipeline }));
+  try {
+    await fetch(`${server.url}/api/brand-contact?domain=brand.com`, {
+      headers: { 'x-hunter-api-key': 'ignored-key' }
+    });
+    assert.deepEqual(calls[0], { domain: 'brand.com', brand: '' });
+  } finally {
+    await server.close();
+  }
+});
+
+test('CORS preflight allows the X-Hunter-Api-Key header', async () => {
+  const server = await listen(createApp({ config: baseConfig, pipeline: { findContact: async () => FOUND } }));
+  try {
+    const preflight = await fetch(`${server.url}/api/brand-contact`, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'https://radar.yaqubu.com',
+        'Access-Control-Request-Method': 'GET',
+        'Access-Control-Request-Headers': 'authorization,x-hunter-api-key'
+      }
+    });
+    assert.equal(preflight.status, 204);
+    assert.match(preflight.headers.get('access-control-allow-headers'), /X-Hunter-Api-Key/);
+    assert.equal(preflight.headers.get('access-control-allow-origin'), 'https://radar.yaqubu.com');
+  } finally {
+    await server.close();
+  }
+});
+

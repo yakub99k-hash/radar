@@ -39,4 +39,25 @@ class UpstreamError extends AppError {
   }
 }
 
-module.exports = { AppError, UpstreamError };
+/**
+ * Shown on the brand card when Hunter refuses a call because the plan/credit
+ * balance is exhausted. Wording is fixed because the frontend displays it as-is.
+ */
+const CREDIT_LIMIT_MESSAGE = 'API Limit Reached - Please add your own Hunter key';
+
+/**
+ * True when Hunter failed because the account has no credits/quota left, so the
+ * user needs to supply their own key (the frontend shows CREDIT_LIMIT_MESSAGE).
+ * 402 is Hunter's "payment required"; 429 is its rate/credit limit.
+ */
+function isCreditLimitError(err) {
+  if (!err) return false;
+  const status = Number(err.upstreamStatus || err.status || 0);
+  const text = `${err.code || ''} ${err.message || ''}`;
+  const fromHunter = String(err.provider || '').toLowerCase() === 'hunter' || /hunter/i.test(text);
+  if (!fromHunter) return false;
+  if (status === 402 || status === 429) return true;
+  return /credit|quota|balance|plan limit|upgrade/i.test(text);
+}
+
+module.exports = { AppError, UpstreamError, isCreditLimitError, CREDIT_LIMIT_MESSAGE };

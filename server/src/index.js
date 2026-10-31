@@ -5,6 +5,8 @@ const { createLogger } = require('./logger');
 const { createApolloClient } = require('./apollo');
 const { createHunterClient } = require('./hunter');
 const { createContactFinder } = require('./contactFinder');
+const { createGeminiClient } = require('./gemini');
+const { fetchSiteText } = require('./siteText');
 const { createTtlCache } = require('./cache');
 const { createSemaphore } = require('./semaphore');
 const { createAuthMiddleware } = require('./auth');
@@ -29,9 +31,50 @@ function buildServices(config, logger, options = {}) {
     fetchImpl
   });
 
+  // A key sent by the browser gets its own client, so the owner's key is never
+  // spent for that request. Cached per key; the map stays small in practice.
+  const hunterClients = new Map();
+  function hunterFor(hunterApiKey) {
+    const key = String(hunterApiKey || '').trim();
+    if (!key || key === config.hunter.apiKey) return hunter;
+    if (!hunterClients.has(key)) {
+      hunterClients.set(
+        key,
+        createHunterClient({
+          ...config.hunter,
+          apiKey: key,
+          logger,
+          timeoutMs: config.http.timeoutMs,
+          retries: config.http.retries,
+          fetchImpl
+        })
+      );
+    }
+    return hunterClients.get(key);
+  }
+
+  const gemini = createGeminiClient({
+    apiKey: config.gemini && config.gemini.apiKey,
+    model: config.gemini && config.gemini.model,
+    logger,
+    timeoutMs: config.http.timeoutMs,
+    sdkFactory: options.geminiSdkFactory
+  });
+
   const finder = createContactFinder({
     apollo,
     hunter,
+    gemini,
+    hunterFor,
+    fetchSiteText:
+      options.fetchSiteText ||
+      ((domain) =>
+        fetchSiteText({
+          domain,
+          logger,
+          fetchImpl,
+          timeoutMs: config.pipeline.siteTextTimeoutMs
+        })),
     logger,
     cache: createTtlCache({ ttlMs: config.pipeline.cacheTtlMs, maxEntries: 500 }),
     options: {
@@ -45,7 +88,8 @@ function buildServices(config, logger, options = {}) {
       requireBrandDomain: config.pipeline.requireBrandDomain,
       negativeCacheTtlMs: config.pipeline.negativeCacheTtlMs,
       acceptStatuses: config.hunter.acceptStatuses,
-      domainSearchLimit: config.hunter.domainSearchLimit
+      domainSearchLimit: config.hunter.domainSearchLimit,
+      geminiEmailScan: config.pipeline.geminiEmailScan
     }
   });
 
@@ -80,6 +124,9 @@ function main() {
   if (!summary.hunter) {
     logger.warn('HUNTER_API_KEY is missing: /api/brand-contact will answer 503 until it is set.');
   }
+  if (!summary.gemini) {
+    logger.warn('GEMINI_API_KEY is missing: the AI email scan and contact ranking are skipped.');
+  }
   if (config.auth.requireAuth && !summary.auth) {
     logger.warn('REQUIRE_AUTH is on but FIREBASE_WEB_API_KEY is missing: every request will be rejected.');
   }
@@ -95,6 +142,7 @@ function main() {
       port: config.port,
       apollo: summary.apollo,
       hunter: summary.hunter,
+      gemini: summary.gemini,
       auth: summary.auth
     });
   });
