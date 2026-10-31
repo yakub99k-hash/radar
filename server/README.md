@@ -112,7 +112,7 @@ variables win over both. `npm run dev` restarts on file changes.
 Then put the deployed URL into `index.html`:
 
 ```js
-var CONTACT_FALLBACK_API="https://your-service.example.com";
+var CONTACT_FALLBACK_API="https://your-service.example.com";   // or .../api/brand-contact
 ```
 
 Leave it empty and the frontend simply skips the automatic step.
