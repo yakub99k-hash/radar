@@ -76,7 +76,14 @@ function buildConfig(env = process.env) {
       pollAttempts: Math.min(Math.max(toInt(env.HUNTER_POLL_ATTEMPTS, 3), 1), 10),
       pollDelayMs: Math.max(toInt(env.HUNTER_POLL_DELAY_MS, 1500), 250),
       // Rows requested from /v2/domain-search when Hunter does the work alone.
-      domainSearchLimit: Math.min(Math.max(toInt(env.HUNTER_DOMAIN_SEARCH_LIMIT, 10), 1), 100)
+      domainSearchLimit: Math.min(Math.max(toInt(env.HUNTER_DOMAIN_SEARCH_LIMIT, 10), 1), 100),
+      // Per-request keys sent by the browser in x-hunter-api-key.
+      allowUserKey: toBool(env.ALLOW_USER_HUNTER_KEY, true)
+    },
+
+    gemini: {
+      apiKey: String(env.GEMINI_API_KEY || '').trim(),
+      model: String(env.GEMINI_MODEL || 'gemini-2.5-flash').trim() || 'gemini-2.5-flash'
     },
 
     pipeline: {
@@ -89,7 +96,11 @@ function buildConfig(env = process.env) {
       requireBrandDomain: toBool(env.REQUIRE_BRAND_DOMAIN, true),
       cacheTtlMs: Math.max(toInt(env.CACHE_TTL_SECONDS, 21600), 0) * 1000,
       negativeCacheTtlMs: Math.max(toInt(env.CACHE_NEGATIVE_TTL_SECONDS, 1800), 0) * 1000,
-      maxConcurrentLookups: Math.min(Math.max(toInt(env.MAX_CONCURRENT_LOOKUPS, 3), 1), 16)
+      maxConcurrentLookups: Math.min(Math.max(toInt(env.MAX_CONCURRENT_LOOKUPS, 3), 1), 16),
+      // Gemini reads the page text before Hunter is paid for anything.
+      geminiEmailScan: toBool(env.GEMINI_EMAIL_SCAN, true),
+      // Website text is fetched server-side only when the browser sends none.
+      siteTextTimeoutMs: Math.max(toInt(env.SITE_TEXT_TIMEOUT_MS, 6000), 500)
     },
 
     auth: {
@@ -117,6 +128,7 @@ function configSummary(config) {
   return {
     apollo: Boolean(config.apollo.apiKey),
     hunter: Boolean(config.hunter.apiKey),
+    gemini: Boolean(config.gemini && config.gemini.apiKey),
     auth: config.auth.requireAuth ? Boolean(config.auth.firebaseWebApiKey) : false
   };
 }

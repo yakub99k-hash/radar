@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { createContactFinder, REASONS } = require('../src/contactFinder');
-const { AppError } = require('../src/errors');
+const { AppError, UpstreamError } = require('../src/errors');
 const { createTtlCache } = require('../src/cache');
 const { silentLogger } = require('../src/logger');
 
@@ -67,10 +67,33 @@ const JANE = {
   linkedin_url: 'https://www.linkedin.com/in/jane-doe-4a7c21'
 };
 
-function makeFinder({ apollo, hunter, options, cache, now }) {
+function makeGemini(config = {}) {
+  const calls = { findEmails: [], pickBestContact: [] };
+  return {
+    calls,
+    hasKey: config.hasKey !== false,
+    async findEmails(params) {
+      calls.findEmails.push(params);
+      if (typeof config.findEmails === 'function') return config.findEmails(params);
+      if (config.findEmails instanceof Error) throw config.findEmails;
+      return config.findEmails || { emails: [], raw: '' };
+    },
+    async pickBestContact(params) {
+      calls.pickBestContact.push(params);
+      if (typeof config.pickBestContact === 'function') return config.pickBestContact(params);
+      if (config.pickBestContact instanceof Error) throw config.pickBestContact;
+      return config.pickBestContact || null;
+    }
+  };
+}
+
+function makeFinder({ apollo, hunter, options, cache, now, gemini, hunterFor, fetchSiteText }) {
   return createContactFinder({
     apollo,
     hunter,
+    gemini,
+    hunterFor,
+    fetchSiteText,
     logger: silentLogger,
     cache: cache === null ? null : cache || createTtlCache({ ttlMs: 60000 }),
     now,
@@ -490,5 +513,283 @@ test('a valid Apollo result never spends Hunter domain search credits', async ()
   assert.equal(result.found, true);
   assert.equal(result.meta.strategy, 'apollo+hunter');
   assert.equal(hunter.calls.domainSearch.length, 0);
+});
+
+
+test('Gemini finds an email in the page text and no credits are spent', async () => {
+  const apollo = makeApollo({ people: [INFLUENCER], person: JANE });
+  const hunter = makeHunter();
+  const gemini = makeGemini({ findEmails: { emails: ['sam.poe@brand.com'] } });
+  const finder = makeFinder({ apollo, hunter, gemini });
+
+  const result = await finder.findContact({
+    domain: 'brand.com',
+    brand: 'Brand',
+    pageText: 'Sponsorships: write to sam.poe [at] brand [dot] com and we will reply quickly.'
+  });
+
+  assert.equal(result.found, true);
+  assert.equal(result.email, 'sam.poe@brand.com');
+  assert.equal(result.email_source, 'gemini');
+  assert.equal(result.meta.strategy, 'gemini-text');
+  assert.equal(apollo.calls.search.length, 0, 'Apollo was never asked');
+  assert.equal(hunter.calls.domainSearch.length, 0, 'Hunter was never asked');
+  assert.equal(hunter.calls.find.length, 0);
+  assert.equal(gemini.calls.findEmails[0].domain, 'brand.com');
+  assert.match(gemini.calls.findEmails[0].text, /sam\.poe \[at\] brand/);
+});
+
+test('without browser text the backend reads the site for Gemini', async () => {
+  const pageText = 'Contact our creator partnerships team any time at hello@brand.com today.';
+  const fetchSiteText = async (domain) => ({ text: pageText, pages: [`https://${domain}/`] });
+  const gemini = makeGemini({ findEmails: { emails: ['hello@brand.com'] } });
+  const finder = makeFinder({
+    apollo: makeApollo({ people: [] }),
+    hunter: makeHunter(),
+    gemini,
+    fetchSiteText
+  });
+
+  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+
+  assert.equal(result.email, 'hello@brand.com');
+  assert.equal(gemini.calls.findEmails[0].text, pageText);
+});
+
+test('a Gemini failure falls back to the normal Hunter flow', async () => {
+  const apollo = makeApollo({ people: [INFLUENCER], person: JANE });
+  const hunter = makeHunter();
+  const gemini = makeGemini({ findEmails: new Error('Gemini quota exceeded') });
+  const finder = makeFinder({ apollo, hunter, gemini });
+
+  const result = await finder.findContact({
+    domain: 'brand.com',
+    brand: 'Brand',
+    pageText: 'A long enough page text so that Gemini is actually called for this brand.'
+  });
+
+  assert.equal(result.found, true);
+  assert.equal(result.email, 'jane@brand.com');
+  assert.equal(result.meta.strategy, 'apollo+hunter');
+});
+
+test('a role mailbox from Gemini is only used when everything else failed', async () => {
+  const apollo = makeApollo({ people: [] });
+  const hunter = makeHunter({ domainSearch: { emails: [] } });
+  const gemini = makeGemini({ findEmails: { emails: ['press@brand.com'] } });
+  const finder = makeFinder({ apollo, hunter, gemini });
+
+  const result = await finder.findContact({
+    domain: 'brand.com',
+    brand: 'Brand',
+    pageText: 'Press enquiries go to press [at] brand [dot] com, influencer requests too.'
+  });
+
+  assert.equal(result.is_fallback, true);
+  assert.equal(result.found, false);
+  assert.equal(result.email, 'press@brand.com');
+  assert.equal(result.email_source, 'gemini');
+  assert.equal(result.reason, REASONS.GENERIC_EMAIL);
+});
+
+
+test('Gemini picks the best person out of several Hunter candidates', async () => {
+  const apollo = {
+    async searchPeople() {
+      throw new AppError('Apollo down', { status: 502, code: 'APOLLO_503' });
+    }
+  };
+  const hunter = makeHunter({
+    domainSearch: {
+      emails: [
+        {
+          email: 'sam@brand.com',
+          firstName: 'Sam',
+          lastName: 'Poe',
+          position: 'Influencer Marketing Manager',
+          confidence: 80,
+          verification: { status: 'valid' }
+        },
+        {
+          email: 'lee@brand.com',
+          firstName: 'Lee',
+          lastName: 'Ann',
+          position: 'Partnerships Manager',
+          confidence: 70,
+          verification: { status: 'valid' }
+        }
+      ]
+    }
+  });
+  const gemini = makeGemini({
+    pickBestContact: { email: 'lee@brand.com', reason: 'owns brand partnerships' }
+  });
+  const finder = makeFinder({ apollo, hunter, gemini });
+
+  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+
+  assert.equal(result.email, 'lee@brand.com');
+  assert.equal(result.contact_name, 'Lee Ann');
+  assert.equal(result.meta.gemini_pick, 'lee@brand.com');
+  assert.equal(result.meta.gemini_reason, 'owns brand partnerships');
+  assert.equal(gemini.calls.pickBestContact[0].candidates.length, 2);
+  assert.equal(gemini.calls.pickBestContact[0].candidates[0].title, 'Influencer Marketing Manager');
+  assert.equal(gemini.calls.pickBestContact[0].brand, 'Brand');
+});
+
+test('a Gemini ranking failure keeps the plain Hunter order', async () => {
+  const apollo = {
+    async searchPeople() {
+      throw new AppError('Apollo down', { status: 502, code: 'APOLLO_503' });
+    }
+  };
+  const hunter = makeHunter({
+    domainSearch: {
+      emails: [
+        {
+          email: 'sam@brand.com',
+          firstName: 'Sam',
+          lastName: 'Poe',
+          position: 'Influencer Marketing Manager',
+          verification: { status: 'valid' }
+        },
+        {
+          email: 'lee@brand.com',
+          firstName: 'Lee',
+          lastName: 'Ann',
+          position: 'Partnerships Manager',
+          verification: { status: 'valid' }
+        }
+      ]
+    }
+  });
+  const gemini = makeGemini({ pickBestContact: new Error('model overloaded') });
+  const finder = makeFinder({ apollo, hunter, gemini });
+
+  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+
+  assert.equal(result.found, true);
+  assert.equal(result.email, 'sam@brand.com', 'best Hunter title still wins');
+  assert.equal(result.meta.gemini_pick, undefined);
+});
+
+
+test("the browser's Hunter key is used for that request only", async () => {
+  const browserCalls = { domainSearch: [] };
+  const browserHunter = {
+    async domainSearch(params) {
+      browserCalls.domainSearch.push(params);
+      return {
+        emails: [
+          {
+            email: 'lee@brand.com',
+            firstName: 'Lee',
+            lastName: 'Ann',
+            position: 'Partnerships Manager',
+            verification: { status: 'valid' }
+          }
+        ]
+      };
+    },
+    async verifyEmail() {
+      throw new Error('domain search already verified this address');
+    },
+    async findEmail() {
+      return null;
+    }
+  };
+  const keys = [];
+  const apollo = {
+    async searchPeople() {
+      throw new AppError('Apollo down', { status: 502, code: 'APOLLO_503' });
+    }
+  };
+  const hunter = makeHunter();
+  const finder = makeFinder({
+    apollo,
+    hunter,
+    hunterFor: (key) => {
+      keys.push(key);
+      return browserHunter;
+    }
+  });
+
+  const result = await finder.findContact({
+    domain: 'brand.com',
+    brand: 'Brand',
+    hunterApiKey: 'user-key-123'
+  });
+
+  assert.deepEqual(keys, ['user-key-123']);
+  assert.equal(result.found, true);
+  assert.equal(result.email, 'lee@brand.com');
+  assert.equal(browserCalls.domainSearch.length, 1);
+  assert.equal(hunter.calls.domainSearch.length, 0, "the owner's key was not touched");
+});
+
+test('a blank browser key keeps using the server key', async () => {
+  const hunter = makeHunter({
+    domainSearch: {
+      emails: [
+        {
+          email: 'jane@brand.com',
+          firstName: 'Jane',
+          lastName: 'Doe',
+          position: 'Influencer Marketing Manager',
+          verification: { status: 'valid' }
+        }
+      ]
+    }
+  });
+  const usedKeys = [];
+  const finder = makeFinder({
+    apollo: makeApollo({ people: [] }),
+    hunter,
+    hunterFor: (key) => {
+      usedKeys.push(key);
+      return hunter;
+    }
+  });
+
+  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand', hunterApiKey: '   ' });
+
+  assert.equal(result.found, true);
+  assert.deepEqual(usedKeys, [], 'no per-request client for an empty key');
+  assert.equal(hunter.calls.domainSearch.length, 1);
+});
+
+test('an exhausted Hunter plan shows the upgrade message', async () => {
+  const apollo = {
+    async searchPeople() {
+      throw new AppError('Apollo down', { status: 502, code: 'APOLLO_503' });
+    }
+  };
+  const hunter = makeHunter({
+    domainSearch: () => {
+      throw new UpstreamError('Hunter', 402, 'Payment required: no credits left');
+    }
+  });
+  const finder = makeFinder({ apollo, hunter });
+
+  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+
+  assert.equal(result.found, false);
+  assert.equal(result.reason, REASONS.CREDIT_LIMIT);
+  assert.equal(result.message, 'API Limit Reached - Please add your own Hunter key');
+});
+
+test('a 429 while verifying also shows the upgrade message', async () => {
+  const apollo = makeApollo({ people: [INFLUENCER], person: JANE });
+  const hunter = makeHunter({
+    verify: () => {
+      throw new UpstreamError('Hunter', 429, 'Hunter rate limit or credit limit reached.');
+    }
+  });
+  const finder = makeFinder({ apollo, hunter });
+
+  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+
+  assert.equal(result.reason, REASONS.CREDIT_LIMIT);
+  assert.equal(result.message, 'API Limit Reached - Please add your own Hunter key');
 });
 

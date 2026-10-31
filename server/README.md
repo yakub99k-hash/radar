@@ -8,8 +8,11 @@ scrapes the website, this service is the automatic fallback.
 
 ```
 frontend (index.html)
-   │  GET /api/brand-contact?domain=brand.com&brand=Brand
+   │  POST /api/brand-contact  { domain, brand, pageText? }
+   │  headers: Authorization (Firebase), x-hunter-api-key (optional, the user's key)
    ▼
+0. Gemini  reads the page text                (few tokens)  -> an email here costs
+           (sent by the browser, or fetched by the service)     nothing else
 A. Apollo path (used when Apollo answers)
    1. Apollo  POST /mixed_people/api_search      (0 credits)  titles: Influencer Marketing,
                                                              Partnerships, Creator Relations,
@@ -22,7 +25,8 @@ A. Apollo path (used when Apollo answers)
 B. Hunter path (Apollo missing, placeholder key, outage, or knows nobody)
    1. Hunter  GET  /v2/domain-search             (1 credit)   every address Hunter knows
    2. rank    same title scoring -> named contacts before info@ / press@
-   3. verify  reuse the status domain search returned, else /v2/email-verifier
+   3. Gemini  picks the influencer/partnership owner out of the shortlist (few tokens)
+   4. verify  reuse the status domain search returned, else /v2/email-verifier
 
 6. filter  off-domain addresses, and info@, press@, support@ ... -> marked as "fallback",
            never returned as a person
@@ -61,6 +65,8 @@ best candidate only (cost control).
 | --- | --- | --- |
 | `domain` | query or JSON body | required, `https://www.brand.com/x` is cleaned to `brand.com` |
 | `brand` | query or JSON body | optional, used to disambiguate when Apollo does not know the domain |
+| `pageText` | JSON body | optional, the page text the browser already scraped for the Gemini step (max 40 kB) |
+| `x-hunter-api-key` | header | optional, spend the caller's own Hunter credits for this request only |
 
 Success:
 
@@ -114,12 +120,45 @@ flagged**, so the UI can offer it as a last resort:
 ```
 
 `reason` values: `INVALID_DOMAIN`, `NO_PERSON_FOUND`, `NO_EMAIL_FOUND`,
-`EMAIL_UNVERIFIED`, `GENERIC_EMAIL`, `UPSTREAM_ERROR`.
+`EMAIL_UNVERIFIED`, `GENERIC_EMAIL`, `UPSTREAM_ERROR`, `HUNTER_CREDIT_LIMIT`.
+`HUNTER_CREDIT_LIMIT` is the one the UI shows as
+**"API Limit Reached - Please add your own Hunter key"** (Hunter answered 402/429).
 
 Errors use normal HTTP codes with `{ "error": "...", "code": "..." }`
 (400 missing/invalid domain, 401 bad login, 429 upstream rate limit, 5xx).
 
-Health check: `GET /healthz` -> `{ ok, apollo, hunter, auth, uptime_s }`
+Health check: `GET /healthz` -> `{ ok, apollo, hunter, gemini, auth, uptime_s }`
+
+## Bring your own Hunter key
+
+The frontend stores a visitor's Hunter key in `localStorage` and sends it as
+`x-hunter-api-key`. The service builds a Hunter client for that key and uses it
+for **that request only**, so a user never spends the owner's credits and the
+owner's key is never exposed. No header (or an empty one) falls back to
+`HUNTER_API_KEY`. Set `ALLOW_USER_HUNTER_KEY=false` to ignore the header and
+always bill the owner. Keys are never logged or put in URLs.
+
+## The Gemini steps
+
+Both are optional; configure `GEMINI_API_KEY` to switch them on.
+
+1. **Page text scan** (before any Hunter call). Gemini reads the text of the
+   brand's pages and returns addresses the regex-based scraper misses -
+   `press [at] brand [dot] com`, addresses only in JSON-LD, in image alt text,
+   and so on. A person's address on the brand domain is returned immediately,
+   spending no Hunter credits. A role mailbox (`press@`) is kept as a fallback
+   and only offered when nothing better was found.
+   The browser usually forwards the text it already scraped (`pageText`); when
+   it does not, the service fetches `/`, `/contact`, `/contact-us`, `/about` and
+   `/about-us` itself within `SITE_TEXT_TIMEOUT_MS`.
+2. **Candidate ranking.** When Hunter returns several people, their names and
+   titles go to Gemini with the question *"Which of these people is most likely
+   in charge of Influencer Marketing, Brand Partnerships, or is the Founder?"*
+   Only the chosen contact is verified and returned. The answer is matched back
+   against the list, so a hallucinated address can never reach the frontend.
+
+Any Gemini failure (no key, timeout, quota, bad JSON) is logged and ignored: the
+pipeline continues with Hunter exactly as before.
 
 ## Setup
 
@@ -164,6 +203,11 @@ Leave it empty and the frontend simply skips the automatic step.
 | `HUNTER_POLL_ATTEMPTS` / `HUNTER_POLL_DELAY_MS` | `3` / `1500` | retries while Hunter verifies (HTTP 202) |
 | `MIN_TITLE_SCORE` | `25` | drop irrelevant titles before spending credits |
 | `HUNTER_DOMAIN_SEARCH_LIMIT` | `10` | rows requested from `/v2/domain-search` in Hunter-only mode |
+| `ALLOW_USER_HUNTER_KEY` | `true` | accept a visitor's key in `x-hunter-api-key` |
+| `GEMINI_API_KEY` | – | optional, enables the two Gemini steps |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model used for both steps |
+| `GEMINI_EMAIL_SCAN` | `true` | read the page text with Gemini before spending Hunter credits |
+| `SITE_TEXT_TIMEOUT_MS` | `6000` | budget for downloading the brand's pages when the browser sends no text |
 
 ## Credit safety
 

@@ -1,6 +1,6 @@
 'use strict';
 
-const { AppError } = require('./errors');
+const { AppError, isCreditLimitError, CREDIT_LIMIT_MESSAGE } = require('./errors');
 const {
   normalizeDomain,
   emailOnDomain,
@@ -20,13 +20,18 @@ const REASONS = Object.freeze({
   NO_EMAIL_FOUND: 'NO_EMAIL_FOUND',
   EMAIL_UNVERIFIED: 'EMAIL_UNVERIFIED',
   GENERIC_EMAIL: 'GENERIC_EMAIL',
-  UPSTREAM_ERROR: 'UPSTREAM_ERROR'
+  UPSTREAM_ERROR: 'UPSTREAM_ERROR',
+  CREDIT_LIMIT: 'HUNTER_CREDIT_LIMIT'
 });
 
 const STRATEGIES = Object.freeze({
   APOLLO: 'apollo+hunter',
-  HUNTER: 'hunter-domain-search'
+  HUNTER: 'hunter-domain-search',
+  GEMINI: 'gemini-text'
 });
+
+/** Loose shape check; the strict rules live in filters.analyzeEmail/emailOnDomain. */
+const EMAIL_SHAPE_RE = /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/;
 
 /** The shape the frontend always receives, even when nothing was found. */
 function buildResult(partial) {
@@ -40,6 +45,7 @@ function buildResult(partial) {
     found: Boolean(partial.found),
     reason: partial.reason || null,
     message: partial.message || '',
+    email_source: partial.email_source || null,
     meta: partial.meta || {}
   };
 }
@@ -67,6 +73,9 @@ function cleanName(value) {
 function createContactFinder(deps = {}) {
   const apollo = deps.apollo;
   const hunter = deps.hunter;
+  const gemini = deps.gemini;
+  const hunterFor = deps.hunterFor;
+  const fetchSiteText = deps.fetchSiteText;
   const logger = deps.logger;
   const cache = deps.cache;
   const now = deps.now || Date.now;
@@ -87,6 +96,31 @@ function createContactFinder(deps = {}) {
   const maxEmailsToVerify = options.maxEmailsToVerify || 2;
   const domainSearchLimit = options.domainSearchLimit || 10;
   const negativeCacheTtlMs = options.negativeCacheTtlMs;
+  const geminiEmailScan = options.geminiEmailScan !== false;
+  // Gemini is optional: without a key every AI step is skipped silently.
+  const ai = gemini && gemini.hasKey ? gemini : null;
+
+  /**
+   * Per-request Hunter client: a key sent by the browser wins, otherwise the
+   * owner's key from HUNTER_API_KEY (the client injected as `hunter`) is used.
+   */
+  function hunterClientFor(hunterApiKey) {
+    const key = typeof hunterApiKey === 'string' ? hunterApiKey.trim() : '';
+    if (key && typeof hunterFor === 'function') {
+      const client = hunterFor(key);
+      if (client) return client;
+    }
+    return hunter;
+  }
+
+  /** The card message the frontend shows when Hunter is out of credits. */
+  function creditLimitResult(meta) {
+    return buildResult({
+      reason: REASONS.CREDIT_LIMIT,
+      message: CREDIT_LIMIT_MESSAGE,
+      meta
+    });
+  }
 
   const inflight = new Map();
 
@@ -96,7 +130,8 @@ function createContactFinder(deps = {}) {
 
 
   /** Asks Hunter for an email using the most precise identifier first. */
-  async function lookupEmails(person, domain) {
+  async function lookupEmails(person, domain, h) {
+    const client = h || hunter;
     const handle = linkedinHandle(person.linkedinUrl);
     const strategies = [];
     if (handle) strategies.push({ linkedinHandle: handle });
@@ -112,8 +147,10 @@ function createContactFinder(deps = {}) {
     for (const strategy of strategies) {
       let match = null;
       try {
-        match = await hunter.findEmail(strategy);
+        match = await client.findEmail(strategy);
       } catch (err) {
+        // Out of credits: tell the user instead of silently trying more calls.
+        if (isCreditLimitError(err)) throw err;
         if (logger) {
           logger.warn('hunter email-finder failed', {
             strategy: strategy.linkedinHandle ? 'linkedin' : 'domain',
@@ -136,7 +173,8 @@ function createContactFinder(deps = {}) {
    * email finder -> Hunter verifier.
    * @returns {Promise<object>} result object (never throws for "empty" outcomes)
    */
-  async function runApolloPath(domain, brand) {
+  async function runApolloPath(domain, brand, h) {
+    const client = h || hunter;
     const startedAt = now();
     const baseMeta = { domain, brand: brand || null, strategy: STRATEGIES.APOLLO };
     const rejected = [];
@@ -222,7 +260,15 @@ function createContactFinder(deps = {}) {
       if (!linkedinUrl && (!firstName || !lastName)) continue;
 
       const title = (person && person.title) || candidate.title || null;
-      const matches = await lookupEmails({ fullName, firstName, lastName, linkedinUrl }, domain);
+      let matches;
+      try {
+        matches = await lookupEmails({ fullName, firstName, lastName, linkedinUrl }, domain, client);
+      } catch (err) {
+        if (isCreditLimitError(err)) {
+          return creditLimitResult({ ...baseMeta, elapsed_ms: now() - startedAt });
+        }
+        throw err;
+      }
       if (!matches.length) continue;
 
       for (const match of matches) {
@@ -235,9 +281,12 @@ function createContactFinder(deps = {}) {
 
         let verification;
         try {
-          verification = await hunter.verifyEmail(match.email);
+          verification = await client.verifyEmail(match.email);
         } catch (err) {
           if (err instanceof AppError && err.code === 'HUNTER_KEY_MISSING') throw err;
+          if (isCreditLimitError(err)) {
+            return creditLimitResult({ ...baseMeta, elapsed_ms: now() - startedAt });
+          }
           if (logger) logger.warn('hunter verifier failed', { email: match.email, error: err.message });
           rejected.push({ email: match.email, reason: 'verifier_error' });
           continue;
@@ -356,7 +405,8 @@ function createContactFinder(deps = {}) {
    * best few - reusing the status domain search already reported.
    * @returns {Promise<object>} result in the same shape as the Apollo path
    */
-  async function runHunterPath(domain, brand, apolloFailure) {
+  async function runHunterPath(domain, brand, apolloFailure, h) {
+    const client = h || hunter;
     const startedAt = now();
     const baseMeta = { domain, brand: brand || null, strategy: STRATEGIES.HUNTER };
     if (apolloFailure) baseMeta.apollo_error = String(apolloFailure.message || apolloFailure);
@@ -364,13 +414,16 @@ function createContactFinder(deps = {}) {
 
     let search;
     try {
-      search = await hunter.domainSearch({ domain, limit: domainSearchLimit });
+      search = await client.domainSearch({ domain, limit: domainSearchLimit });
     } catch (err) {
       if (
         err instanceof AppError &&
         (err.code === 'HUNTER_KEY_MISSING' || err.code === 'HUNTER_BAD_INPUT')
       ) {
         throw err;
+      }
+      if (isCreditLimitError(err)) {
+        return creditLimitResult({ ...baseMeta, elapsed_ms: now() - startedAt });
       }
       if (logger) {
         logger.error('hunter domain search failed', { domain, error: err.message, code: err.code });
@@ -434,16 +487,49 @@ function createContactFinder(deps = {}) {
     let paidVerifications = 0;
     const shortlist = [...preferred, ...others].slice(0, Math.max(maxCandidates, maxEmailsToVerify));
 
-    for (const entry of shortlist) {
+    // Several candidates? Let Gemini pick the influencer/partnership owner, then
+    // verify that one first. Any Gemini failure keeps the Hunter ranking.
+    let ordered = shortlist;
+    if (ai && shortlist.length > 1) {
+      try {
+        const pick = await ai.pickBestContact({
+          brand,
+          domain,
+          candidates: shortlist.map((entry) => ({
+            email: entry.email,
+            contact_name: entry.fullName,
+            title: entry.position
+          }))
+        });
+        if (pick && pick.email) {
+          const chosen = shortlist.find((entry) => entry.email === pick.email);
+          if (chosen) {
+            ordered = [chosen, ...shortlist.filter((entry) => entry !== chosen)];
+            baseMeta.gemini_pick = pick.email;
+            if (pick.reason) baseMeta.gemini_reason = pick.reason;
+          }
+        }
+      } catch (err) {
+        if (logger) {
+          logger.warn('gemini ranking failed, keeping the Hunter order', {
+            domain,
+            error: err.message
+          });
+        }
+      }
+    }
+
+    for (const entry of ordered) {
       if (paidVerifications >= maxEmailsToVerify) break;
 
       let verification = verificationFromDomainSearch(entry);
       if (!verification) {
         paidVerifications += 1;
         try {
-          verification = await hunter.verifyEmail(entry.email);
+          verification = await client.verifyEmail(entry.email);
         } catch (err) {
           if (err instanceof AppError && err.code === 'HUNTER_KEY_MISSING') throw err;
+          if (isCreditLimitError(err)) return creditLimitResult(meta());
           if (logger) logger.warn('hunter verifier failed', { email: entry.email, error: err.message });
           rejected.push({ email: entry.email, reason: 'verifier_error' });
           continue;
@@ -477,9 +563,10 @@ function createContactFinder(deps = {}) {
       let verification = verificationFromDomainSearch(entry);
       if (!verification) {
         try {
-          verification = await hunter.verifyEmail(entry.email);
+          verification = await client.verifyEmail(entry.email);
         } catch (err) {
           if (err instanceof AppError && err.code === 'HUNTER_KEY_MISSING') throw err;
+          if (isCreditLimitError(err)) return creditLimitResult(meta());
           if (logger) logger.warn('hunter verifier failed', { email: entry.email, error: err.message });
           rejected.push({ email: entry.email, reason: 'verifier_error' });
           continue;
@@ -522,22 +609,60 @@ function createContactFinder(deps = {}) {
   }
 
   /**
-   * Runs the pipeline for one brand domain.
-   *
-   * Apollo is tried first. When it is not configured, rejects the key, is down,
-   * or knows nobody at the domain, Hunter takes over on its own, so the endpoint
-   * keeps answering instead of failing with a 503.
-   *
+   * Asks Gemini for addresses in the brand's page text. Never throws: a missing
+   * key, a timeout or nonsense output simply means "no AI answer".
+   */
+  async function scanTextWithGemini(domain, brand, pageText) {
+    if (!ai || !geminiEmailScan) return null;
+    let text = String(pageText || '').trim();
+    if (text.length < 60 && typeof fetchSiteText === 'function') {
+      try {
+        const page = await fetchSiteText(domain);
+        text = String((page && page.text) || '').trim();
+      } catch (err) {
+        if (logger) logger.warn('could not read website text for Gemini', { domain, error: err.message });
+      }
+    }
+    if (text.length < 60) return null;
+    try {
+      const found = await ai.findEmails({ text, domain, brand });
+      const emails = Array.isArray(found && found.emails) ? found.emails : [];
+      return emails.length ? emails : null;
+    } catch (err) {
+      if (logger) {
+        logger.warn('gemini email scan failed, continuing with Hunter', { domain, error: err.message });
+      }
+      return null;
+    }
+  }
+
+  /** Filters Gemini's findings: brand-domain only, people vs role mailboxes. */
+  function classifyGeminiEmails(emails, domain) {
+    const personal = [];
+    const generic = [];
+    const seen = new Set();
+    for (const raw of emails || []) {
+      const email = String(raw || '').trim().toLowerCase();
+      if (!EMAIL_SHAPE_RE.test(email) || seen.has(email)) continue;
+      if (requireBrandDomain && !emailOnDomain(email, domain)) continue;
+      seen.add(email);
+      if (analyzeEmail(email).generic) generic.push(email);
+      else personal.push(email);
+    }
+    return { personal, generic };
+  }
+
+  /**
+   * Runs the Apollo path, then the Hunter path, without the Gemini text scan.
    * @returns {Promise<object>} result object (never throws for "empty" outcomes)
    */
-  async function run(domain, brand) {
-    const startedAt = now();
-    const canAskHunter = typeof hunter.domainSearch === 'function';
+  async function runStrategies(domain, brand, h, startedAt) {
+    const canAskHunter = typeof h.domainSearch === 'function';
     let apolloResult = null;
     let apolloFailure = null;
 
     try {
-      apolloResult = await runApolloPath(domain, brand);
+      apolloResult = await runApolloPath(domain, brand, h);
     } catch (err) {
       // Thrown for APOLLO_KEY_MISSING only; other outages come back as a result.
       apolloFailure = err.message || String(err);
@@ -582,7 +707,7 @@ function createContactFinder(deps = {}) {
     if (apolloAnswered) return apolloResult;
     if (!canAskHunter) return apolloResult;
 
-    const hunterResult = await runHunterPath(domain, brand, apolloFailure);
+    const hunterResult = await runHunterPath(domain, brand, apolloFailure, h);
     // Apollo knew nobody and Hunter had nothing better to say: keep Apollo's message.
     if (
       apolloResult &&
@@ -593,6 +718,59 @@ function createContactFinder(deps = {}) {
       return apolloResult;
     }
     return hunterResult;
+  }
+
+  /**
+   * Runs the pipeline for one brand domain.
+   *
+   * 1. Gemini reads the page text first: a printed address there costs no credits.
+   * 2. Apollo answers when it can (titles + LinkedIn), Hunter otherwise.
+   * 3. A role mailbox found by Gemini is offered when nothing else worked.
+   *
+   * @param {{domain: string, brand?: string, pageText?: string,
+   *          hunterApiKey?: string}} params
+   * @returns {Promise<object>} result object (never throws for "empty" outcomes)
+   */
+  async function run(domain, brand, request = {}) {
+    const startedAt = now();
+    const h = hunterClientFor(request.hunterApiKey);
+
+    const scanned = await scanTextWithGemini(domain, brand, request.pageText);
+    const fromText = classifyGeminiEmails(scanned, domain);
+    if (fromText.personal.length) {
+      const email = fromText.personal[0];
+      return buildResult({
+        email,
+        email_status: 'unverified',
+        is_fallback: false,
+        found: true,
+        email_source: 'gemini',
+        message: `Gemini found ${email} in the brand's page text, so no Hunter credits were used.`,
+        meta: {
+          domain,
+          brand: brand || null,
+          strategy: STRATEGIES.GEMINI,
+          gemini_emails: fromText.personal.slice(0, 3),
+          elapsed_ms: now() - startedAt
+        }
+      });
+    }
+
+    const result = await runStrategies(domain, brand, h, startedAt);
+    if (fromText.generic.length && !result.found && !result.is_fallback) {
+      const email = fromText.generic[0];
+      return buildResult({
+        email,
+        email_status: 'unverified',
+        is_fallback: true,
+        found: false,
+        email_source: 'gemini',
+        reason: REASONS.GENERIC_EMAIL,
+        message: `Only the generic mailbox ${email} was found in the page text by Gemini.`,
+        meta: { ...result.meta, gemini_fallback: true }
+      });
+    }
+    return result;
   }
 
   /**
@@ -618,7 +796,7 @@ function createContactFinder(deps = {}) {
     const pending = inflight.get(cacheKey);
     if (pending) return pending;
 
-    const task = run(domain, brand)
+    const task = run(domain, brand, params)
       .then((result) => {
         const cacheable = result.reason !== REASONS.UPSTREAM_ERROR;
         if (cache && cacheable) {

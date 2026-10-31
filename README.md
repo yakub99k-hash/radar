@@ -9,12 +9,15 @@ partnership contact for each brand.
 - `server/` — Node.js fallback service. When the website shows **"Not found on
   website"**, the frontend calls `GET/POST /api/brand-contact`, which uses
   **Hunter.io** (domain search + verifier) to find a named contact, verify the
-  email and return clean JSON. Apollo.io is used to rank candidates when its key
+  email and return clean JSON. **Gemini** reads the page text for hidden
+  addresses first (free compared to Hunter credits) and picks the best person
+  when Hunter returns several. Apollo.io is used to rank candidates when its key
   is configured; without a usable Apollo key the Hunter path runs on its own.
+  Visitors can save their own Hunter key in the UI, which is sent per request.
 
 ```
 frontend ──► CONTACT_API (worker, website scrape) ──► "best" printed email
-        └──► CONTACT_FALLBACK_API (server/, Hunter domain search ± Apollo) ──► named contact
+        └──► CONTACT_FALLBACK_API (server/) ──► Gemini text scan ──► Hunter ± Apollo
 ```
 
 ## Run the contact finder

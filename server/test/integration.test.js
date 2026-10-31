@@ -128,7 +128,7 @@ function listen(app) {
   });
 }
 
-async function boot(state, overrides = {}) {
+async function boot(state, overrides = {}, servicesOptions = {}) {
   const upstream = await startMockUpstream(state);
   const config = buildConfig({
     APOLLO_API_KEY: 'apollo-test-key',
@@ -140,7 +140,7 @@ async function boot(state, overrides = {}) {
     HUNTER_POLL_DELAY_MS: '250',
     ...overrides
   });
-  const services = buildServices(config, silentLogger);
+  const services = buildServices(config, silentLogger, servicesOptions);
   const app = createApp({
     config,
     logger: silentLogger,
@@ -252,6 +252,63 @@ test('a rejected Apollo key still answers through the Hunter domain search over 
     // Domain search already said "valid", so no paid verifier call was made.
     assert.equal(state.requests.filter((r) => r.path === '/v2/email-verifier').length, 0);
     assert.equal(state.requests.filter((r) => r.path === '/api/v1/people/match').length, 0);
+  } finally {
+    await close();
+  }
+});
+
+
+test('Gemini finds a hidden email over HTTP before any paid call', async () => {
+  const state = { requests: [], verification: { status: 'valid', result: 'deliverable' } };
+  const sdk = () => ({
+    models: {
+      async generateContent() {
+        return { text: '{"emails": ["sam.poe@brand.com"]}' };
+      }
+    }
+  });
+  const { server, close } = await boot(state, { GEMINI_API_KEY: 'gemini-test-key' }, {
+    geminiSdkFactory: sdk
+  });
+
+  try {
+    const res = await fetch(`${server.url}/api/brand-contact`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-hunter-api-key': 'browser-key-123',
+        Origin: 'https://radar.yaqubu.com'
+      },
+      body: JSON.stringify({
+        domain: 'brand.com',
+        brand: 'Brand',
+        pageText: 'Sponsorships: write to sam.poe [at] brand [dot] com for creator campaigns.'
+      })
+    });
+    const body = await res.json();
+
+    assert.equal(res.status, 200);
+    assert.equal(body.found, true);
+    assert.equal(body.email, 'sam.poe@brand.com');
+    assert.equal(body.email_source, 'gemini');
+    assert.equal(body.meta.strategy, 'gemini-text');
+    assert.equal(state.requests.length, 0, 'neither Apollo nor Hunter was called');
+  } finally {
+    await close();
+  }
+});
+
+test('the pipeline still answers when Gemini is not configured', async () => {
+  const state = { requests: [], verification: { status: 'valid', result: 'deliverable' } };
+  const { server, close } = await boot(state);
+
+  try {
+    const res = await fetch(`${server.url}/api/brand-contact?domain=brand.com&brand=Brand`);
+    const body = await res.json();
+    assert.equal(res.status, 200);
+    assert.equal(body.found, true);
+    assert.equal(body.email, 'jane@brand.com');
+    assert.equal(body.email_source, null);
   } finally {
     await close();
   }
