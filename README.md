@@ -27,7 +27,7 @@ curl "http://localhost:8787/api/brand-contact?domain=brand.com&brand=Brand"
 Then set the service URL in `index.html`:
 
 ```js
-var CONTACT_FALLBACK_API="https://your-service.example.com";   // or .../api/brand-contact
+var CONTACT_FALLBACK_API="https://radar-backend-kuw7.onrender.com/api/brand-contact";
 ```
 
 Full request/response contract, configuration and deployment notes:
