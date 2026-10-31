@@ -8,12 +8,13 @@ partnership contact for each brand.
   `CONTACT_API` to look for an email printed on the brand's own website.
 - `server/` — Node.js fallback service. When the website shows **"Not found on
   website"**, the frontend calls `GET/POST /api/brand-contact`, which uses
-  **Apollo.io + Hunter.io** to find a named contact, verify the email and return
-  clean JSON.
+  **Hunter.io** (domain search + verifier) to find a named contact, verify the
+  email and return clean JSON. Apollo.io is used to rank candidates when its key
+  is configured; without a usable Apollo key the Hunter path runs on its own.
 
 ```
 frontend ──► CONTACT_API (worker, website scrape) ──► "best" printed email
-        └──► CONTACT_FALLBACK_API (server/, Apollo + Hunter) ──► named contact
+        └──► CONTACT_FALLBACK_API (server/, Hunter domain search ± Apollo) ──► named contact
 ```
 
 ## Run the contact finder
@@ -27,7 +28,7 @@ curl "http://localhost:8787/api/brand-contact?domain=brand.com&brand=Brand"
 Then set the service URL in `index.html`:
 
 ```js
-var CONTACT_FALLBACK_API="https://your-service.example.com";
+var CONTACT_FALLBACK_API="https://radar-backend-kuw7.onrender.com/api/brand-contact";
 ```
 
 Full request/response contract, configuration and deployment notes:

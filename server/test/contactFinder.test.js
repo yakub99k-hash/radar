@@ -27,7 +27,7 @@ function makeApollo(config = {}) {
 }
 
 function makeHunter(config = {}) {
-  const calls = { find: [], verify: [] };
+  const calls = { find: [], verify: [], domainSearch: [] };
   return {
     calls,
     async findEmail(params) {
@@ -35,12 +35,24 @@ function makeHunter(config = {}) {
       if (typeof config.find === 'function') return config.find(params);
       return config.find === undefined ? { email: 'jane@brand.com', score: 92 } : config.find;
     },
+    async domainSearch(params) {
+      calls.domainSearch.push(params);
+      if (typeof config.domainSearch === 'function') return config.domainSearch(params);
+      return config.domainSearch === undefined ? { emails: [] } : config.domainSearch;
+    },
     async verifyEmail(email) {
       calls.verify.push(email);
       if (typeof config.verify === 'function') return config.verify(email);
       return config.verify || { status: 'valid', result: 'deliverable', score: 95 };
     }
   };
+}
+
+/** A Hunter client from before domain search existed (no `domainSearch`). */
+function makeHunterWithoutSearch(config = {}) {
+  const hunter = makeHunter(config);
+  delete hunter.domainSearch;
+  return hunter;
 }
 
 const INFLUENCER = {
@@ -264,7 +276,7 @@ test('an invalid domain is rejected before any paid call', async () => {
   assert.equal(apollo.calls.search.length, 0);
 });
 
-test('Apollo outages never break the frontend response', async () => {
+test('Apollo outages fall back to the Hunter domain search', async () => {
   const apollo = {
     async searchPeople() {
       const err = new Error('Apollo rate limit or credit limit reached.');
@@ -272,7 +284,44 @@ test('Apollo outages never break the frontend response', async () => {
       throw err;
     }
   };
-  const finder = makeFinder({ apollo, hunter: makeHunter() });
+  const hunter = makeHunter({
+    domainSearch: {
+      emails: [
+        {
+          email: 'jane@brand.com',
+          type: 'personal',
+          confidence: 94,
+          firstName: 'Jane',
+          lastName: 'Doe',
+          position: 'Influencer Marketing Manager',
+          linkedinUrl: 'https://www.linkedin.com/in/jane-doe-4a7c21',
+          verification: { status: 'valid' }
+        }
+      ]
+    }
+  });
+  const finder = makeFinder({ apollo, hunter });
+
+  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+
+  assert.equal(result.found, true);
+  assert.equal(result.email, 'jane@brand.com');
+  assert.equal(result.contact_name, 'Jane Doe');
+  assert.equal(result.meta.strategy, 'hunter-domain-search');
+  assert.match(result.meta.apollo_error, /rate limit/);
+  assert.equal(hunter.calls.domainSearch[0].domain, 'brand.com');
+  assert.equal(hunter.calls.verify.length, 0, 'domain search already reported "valid"');
+});
+
+test('Apollo outages still answer UPSTREAM_ERROR when Hunter cannot search domains', async () => {
+  const apollo = {
+    async searchPeople() {
+      const err = new Error('Apollo rate limit or credit limit reached.');
+      err.code = 'APOLLO_429';
+      throw err;
+    }
+  };
+  const finder = makeFinder({ apollo, hunter: makeHunterWithoutSearch() });
 
   const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
 
@@ -282,7 +331,7 @@ test('Apollo outages never break the frontend response', async () => {
   assert.ok(result.meta.elapsed_ms >= 0);
 });
 
-test('missing Apollo credentials bubble up as a 503', async () => {
+test('missing Apollo credentials no longer surface as a 503', async () => {
   const apollo = {
     async searchPeople() {
       throw new AppError('Apollo API key is not configured', {
@@ -291,10 +340,155 @@ test('missing Apollo credentials bubble up as a 503', async () => {
       });
     }
   };
-  const finder = makeFinder({ apollo, hunter: makeHunter() });
+  const hunter = makeHunter({
+    domainSearch: {
+      emails: [
+        {
+          email: 'jane@brand.com',
+          firstName: 'Jane',
+          lastName: 'Doe',
+          position: 'Creator Relations Lead',
+          verification: { status: 'valid' }
+        }
+      ]
+    }
+  });
+  const finder = makeFinder({ apollo, hunter });
+
+  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+
+  assert.equal(result.found, true);
+  assert.equal(result.email, 'jane@brand.com');
+  assert.equal(result.meta.strategy, 'hunter-domain-search');
+});
+
+test('APOLLO_KEY_MISSING is still a 503 when Hunter cannot search domains', async () => {
+  const apollo = {
+    async searchPeople() {
+      throw new AppError('Apollo API key is not configured', {
+        status: 503,
+        code: 'APOLLO_KEY_MISSING'
+      });
+    }
+  };
+  const finder = makeFinder({ apollo, hunter: makeHunterWithoutSearch() });
 
   await assert.rejects(
     () => finder.findContact({ domain: 'brand.com', brand: 'Brand' }),
     (err) => err.status === 503 && err.code === 'APOLLO_KEY_MISSING'
   );
 });
+
+test('Apollo knowing nobody hands the domain over to Hunter', async () => {
+  const apollo = makeApollo({ people: [] });
+  const hunter = makeHunter({
+    domainSearch: {
+      emails: [
+        {
+          email: 'jane@brand.com',
+          firstName: 'Jane',
+          lastName: 'Doe',
+          position: 'Head of Influencer Marketing',
+          verification: { status: 'valid' }
+        }
+      ]
+    }
+  });
+  const finder = makeFinder({ apollo, hunter });
+
+  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+
+  assert.equal(result.found, true);
+  assert.equal(result.email, 'jane@brand.com');
+  assert.equal(hunter.calls.find.length, 0, 'the finder is not needed when domain search answers');
+});
+
+test('Hunter domain search only pays for a verification it does not already know', async () => {
+  const apollo = {
+    async searchPeople() {
+      throw new AppError('Apollo down', { status: 502, code: 'APOLLO_503' });
+    }
+  };
+  const hunter = makeHunter({
+    domainSearch: {
+      emails: [
+        {
+          email: 'sam@brand.com',
+          firstName: 'Sam',
+          lastName: 'Poe',
+          position: 'Partnerships Manager',
+          confidence: 55
+        }
+      ]
+    },
+    verify: { status: 'valid', result: 'deliverable', score: 91 }
+  });
+  const finder = makeFinder({ apollo, hunter });
+
+  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+
+  assert.equal(result.found, true);
+  assert.deepEqual(hunter.calls.verify, ['sam@brand.com']);
+  assert.equal(result.meta.hunter_score, 55);
+});
+
+test('Hunter domain search drops off-domain addresses without verifying them', async () => {
+  const apollo = {
+    async searchPeople() {
+      throw new AppError('Apollo down', { status: 502, code: 'APOLLO_503' });
+    }
+  };
+  const hunter = makeHunter({
+    domainSearch: {
+      emails: [
+        {
+          email: 'jane@gmail.com',
+          position: 'Influencer Marketing Manager',
+          verification: { status: 'valid' }
+        }
+      ]
+    }
+  });
+  const finder = makeFinder({ apollo, hunter });
+
+  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+
+  assert.equal(result.found, false);
+  assert.equal(result.reason, REASONS.NO_EMAIL_FOUND);
+  assert.equal(hunter.calls.verify.length, 0);
+  assert.deepEqual(result.meta.rejected[0], { email: 'jane@gmail.com', reason: 'off_domain' });
+});
+
+test('a verified role mailbox from Hunter domain search is a fallback', async () => {
+  const apollo = {
+    async searchPeople() {
+      throw new AppError('Apollo down', { status: 502, code: 'APOLLO_503' });
+    }
+  };
+  const hunter = makeHunter({
+    domainSearch: {
+      emails: [{ email: 'press@brand.com', type: 'generic', verification: { status: 'valid' } }]
+    }
+  });
+  const finder = makeFinder({ apollo, hunter });
+
+  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+
+  assert.equal(result.is_fallback, true);
+  assert.equal(result.found, false);
+  assert.equal(result.reason, REASONS.GENERIC_EMAIL);
+  assert.equal(result.email, 'press@brand.com');
+});
+
+test('a valid Apollo result never spends Hunter domain search credits', async () => {
+  const apollo = makeApollo({ people: [INFLUENCER], person: JANE });
+  const hunter = makeHunter();
+  const finder = makeFinder({ apollo, hunter });
+
+  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+
+  assert.equal(result.found, true);
+  assert.equal(result.meta.strategy, 'apollo+hunter');
+  assert.equal(hunter.calls.domainSearch.length, 0);
+});
+

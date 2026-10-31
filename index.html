@@ -122,9 +122,11 @@ td input{min-width:200px;font-family:ui-monospace,monospace;font-size:.78rem}td 
 var CONTACT_API="https://radar-contacts.yakub99k.workers.dev/";
 /* Optional fallback service (the "server" folder in this repo). When the brand
    website prints no email, this finds a named contact through Apollo + Hunter.
-   Paste the deployed URL here, e.g. "https://radar-contacts-api.onrender.com".
+   Paste the deployed URL here: either the service root
+   ("https://your-service.onrender.com") or the full endpoint
+   ("https://your-service.onrender.com/api/brand-contact") both work.
    Leave it empty to skip the automatic step. */
-var CONTACT_FALLBACK_API="";
+var CONTACT_FALLBACK_API="https://radar-backend-kuw7.onrender.com/api/brand-contact";
 var S={rows:[],known:""},KEY="yqr:v2",YT="https://www.googleapis.com/youtube/v3",MAXV=2000;
 function $(i){return document.getElementById(i)}
 function msg(t){$("msg").textContent=t||""}
@@ -184,9 +186,16 @@ function liUrl(r){return "https://www.linkedin.com/search/results/people/?keywor
 /* Asks the fallback backend (Apollo + Hunter) for a named contact. */
 function autoContact(dom,brand){
   if(!CONTACT_FALLBACK_API)return Promise.resolve(null);
-  var u=CONTACT_FALLBACK_API.replace(/\/+$/,"")+"/api/brand-contact?"+new URLSearchParams({domain:dom,brand:brand||""});
+  /* Tolerate a trailing slash, a "/api" suffix, or the full endpoint path. */
+  var root=CONTACT_FALLBACK_API.trim().replace(/\/+$/,"").replace(/\/api\/brand-contact$/i,"").replace(/\/api$/i,"");
+  var u=root+"/api/brand-contact?"+new URLSearchParams({domain:dom,brand:brand||""});
   return firebase.auth().currentUser.getIdToken().then(function(t){
-    return fetch(u,{headers:{Authorization:"Bearer "+t}})
+    /* The backend already answers CORS itself (Access-Control-Allow-Origin: *
+       and Access-Control-Allow-Headers: Authorization), so nothing is added to
+       the request here - sending an "Access-Control-*" request header would
+       actually break the preflight. credentials:"omit" keeps the request
+       compatible with that "*" origin. */
+    return fetch(u,{mode:"cors",credentials:"omit",cache:"no-store",headers:{Authorization:"Bearer "+t,Accept:"application/json"}})
   }).then(function(x){return x.json().then(function(j){if(!x.ok)throw new Error(j.error||"Automatic contact lookup failed.");return j})})
     .catch(function(e){return {found:false,reason:"REQUEST_FAILED",message:e.message||"Automatic contact lookup failed."}})
 }
@@ -211,6 +220,12 @@ function enrich(r){
         else if(!j.best)r.note="No email is printed on this website ("+j.pagesChecked+" pages checked). Try LinkedIn, or send it to Claude chat.";
         else{r.note="";if(!r.email){r.email=j.best.email;r.emailType=j.best.label}}
         if(!j.best)return autoContact(dom,r.brand).then(function(a){applyAuto(r,a)})})
+      .catch(function(e){
+        /* Scraper failed (offline, CORS, 5xx): we still have no email, so ask
+           the fallback backend before giving up. */
+        r.found=null;r.note=e.message||"Lookup failed.";
+        if(!CONTACT_FALLBACK_API||!dom)return;
+        return autoContact(dom,r.brand).then(function(a){applyAuto(r,a)})})
   }).catch(function(e){r.note=e.message}).then(function(){r.busy=false;save();draw()})}
 $("all").onclick=function(){var l=S.rows.filter(function(r){return !r.found});if(!l.length){msg("Every brand has already been searched.");return}
   l.reduce(function(p,r){return p.then(function(){return enrich(r)})},Promise.resolve()).then(function(){msg("Contact search finished for "+l.length+" brand(s).")})};

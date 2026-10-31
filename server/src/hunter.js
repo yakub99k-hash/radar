@@ -4,7 +4,7 @@ const { AppError } = require('./errors');
 const { requestJson, sleep } = require('./http');
 
 /**
- * Hunter.io client: email finder + email verifier.
+ * Hunter.io client: domain search + email finder + email verifier.
  * The API key travels in the X-API-KEY header so it never ends up in URLs/logs.
  */
 function createHunterClient(options = {}) {
@@ -92,6 +92,77 @@ function createHunterClient(options = {}) {
     }
   }
 
+  function normalizeDomainSearchEmail(item) {
+    if (!item || typeof item !== 'object') return null;
+    // Domain search calls the address "value"; the finder calls it "email".
+    const email = String(item.value || item.email || '').trim().toLowerCase();
+    if (!email || !email.includes('@')) return null;
+    const linkedinUrl = item.linkedin || item.linkedin_url || null;
+    return {
+      email,
+      type: String(item.type || 'personal').toLowerCase(),
+      confidence: Number.isFinite(item.confidence) ? item.confidence : null,
+      firstName: item.first_name || null,
+      lastName: item.last_name || null,
+      position: item.position || null,
+      seniority: item.seniority || null,
+      department: item.department || null,
+      linkedinUrl,
+      // Domain search usually reports a verification status already.
+      verification: item.verification || null,
+      sources: Array.isArray(item.sources) ? item.sources.slice(0, 5) : []
+    };
+  }
+
+  function normalizeDomainSearch(data) {
+    const body = (data && data.data) || null;
+    if (!body || typeof body !== 'object') return null;
+    const emails = Array.isArray(body.emails) ? body.emails : [];
+    return {
+      domain: body.domain || null,
+      organization: body.organization || null,
+      pattern: body.pattern || null,
+      acceptAll: body.accept_all === true,
+      disposable: body.disposable === true,
+      webmail: body.webmail === true,
+      emails: emails.map(normalizeDomainSearchEmail).filter(Boolean)
+    };
+  }
+
+  /**
+   * Lists every address Hunter knows for a domain. This is the workhorse when
+   * Apollo is unavailable: one call returns people, titles, LinkedIn profiles and
+   * often an email verification status, so only a few verifier calls are needed.
+   *
+   * @param {{domain: string, limit?: number, offset?: number, type?: string,
+   *          seniority?: string, department?: string}} params
+   * @returns {Promise<object|null>} null when Hunter has nothing (HTTP 404)
+   */
+  async function domainSearch(params = {}) {
+    if (!params.domain) {
+      throw new AppError('domainSearch needs a domain.', {
+        status: 400,
+        code: 'HUNTER_BAD_INPUT'
+      });
+    }
+
+    const query = { domain: params.domain };
+    if (params.limit) query.limit = params.limit;
+    if (params.offset) query.offset = params.offset;
+    if (params.type) query.type = params.type;
+    if (params.seniority) query.seniority = params.seniority;
+    if (params.department) query.department = params.department;
+
+    try {
+      const { data } = await call('/v2/domain-search', query);
+      return normalizeDomainSearch(data);
+    } catch (err) {
+      // 404 = Hunter has no addresses for this domain; a normal outcome.
+      if (err && err.upstreamStatus === 404) return null;
+      throw err;
+    }
+  }
+
   function normalizeVerifier(data) {
     const body = (data && data.data) || {};
     return {
@@ -169,7 +240,7 @@ function createHunterClient(options = {}) {
     };
   }
 
-  return { findEmail, verifyEmail, hasKey: Boolean(apiKey) };
+  return { findEmail, domainSearch, verifyEmail, hasKey: Boolean(apiKey) };
 }
 
 module.exports = { createHunterClient };
