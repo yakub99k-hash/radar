@@ -120,6 +120,11 @@ td input{min-width:200px;font-family:ui-monospace,monospace;font-size:.78rem}td 
 <script>
 
 var CONTACT_API="https://radar-contacts.yakub99k.workers.dev/";
+/* Optional fallback service (the "server" folder in this repo). When the brand
+   website prints no email, this finds a named contact through Apollo + Hunter.
+   Paste the deployed URL here, e.g. "https://radar-contacts-api.onrender.com".
+   Leave it empty to skip the automatic step. */
+var CONTACT_FALLBACK_API="";
 var S={rows:[],known:""},KEY="yqr:v2",YT="https://www.googleapis.com/youtube/v3",MAXV=2000;
 function $(i){return document.getElementById(i)}
 function msg(t){$("msg").textContent=t||""}
@@ -176,19 +181,36 @@ $("scanBtn").onclick=function(){
 function mx(d){return fetch("https://dns.google/resolve?name="+encodeURIComponent(d)+"&type=MX").then(function(r){return r.json()}).then(function(j){return !!(j.Answer&&j.Answer.length)}).catch(function(){return false})}
 function cleanDom(s){s=String(s||"").toLowerCase().replace(/^https?:\/\//,"").replace(/^www\./,"").split("/")[0];return /^[a-z0-9.-]+\.[a-z]{2,}$/.test(s)?s:""}
 function liUrl(r){return "https://www.linkedin.com/search/results/people/?keywords="+encodeURIComponent(r.brand+" Partnerships Manager")}
+/* Asks the fallback backend (Apollo + Hunter) for a named contact. */
+function autoContact(dom,brand){
+  if(!CONTACT_FALLBACK_API)return Promise.resolve(null);
+  var u=CONTACT_FALLBACK_API.replace(/\/+$/,"")+"/api/brand-contact?"+new URLSearchParams({domain:dom,brand:brand||""});
+  return firebase.auth().currentUser.getIdToken().then(function(t){
+    return fetch(u,{headers:{Authorization:"Bearer "+t}})
+  }).then(function(x){return x.json().then(function(j){if(!x.ok)throw new Error(j.error||"Automatic contact lookup failed.");return j})})
+    .catch(function(e){return {found:false,reason:"REQUEST_FAILED",message:e.message||"Automatic contact lookup failed."}})
+}
+function applyAuto(r,a){
+  if(!a)return;
+  r.auto=a;
+  if(a.is_fallback&&!okEmail(r.email)&&a.email){r.email=a.email;r.emailType="Auto (generic mailbox)"}
+  if(a.found&&okEmail(a.email)){if(!r.email){r.email=a.email;r.emailType="Auto via Apollo + Hunter"}if(!r.cname&&a.contact_name)r.cname=a.contact_name}
+  if(a.email||a.message)r.note=(a.found?a.message||"Found a contact automatically.":(a.message||r.note))
+}
 function enrich(r){
   if(CONTACT_API.indexOf("PASTE")>-1){msg("Contact search is not connected yet.");return Promise.resolve()}
-  r.busy=true;draw();var d=cleanDom(r.domain),pr=Promise.resolve(d);
+  r.busy=true;r.auto=null;draw();var d=cleanDom(r.domain),pr=Promise.resolve(d);
   if(d)r.domainSource="link in description";
   else{var g=norm(r.brand)+".com";pr=mx(g).then(function(ok){if(ok){r.domainSource="guessed from the name, check it";return g}return ""})}
   return pr.then(function(dom){r.domain=dom;r.linkedInSearchUrl=liUrl(r);
-    if(!dom){r.found=null;r.note="No website found. Type the brand's website in the box, then press Find contacts.";return}
+    if(!dom){r.found=null;r.auto=null;r.note="No website found. Type the brand's website in the box, then press Find contacts.";return}
     return firebase.auth().currentUser.getIdToken().then(function(t){return fetch(CONTACT_API+"?"+new URLSearchParams({domain:dom,brand:r.brand}),{headers:{Authorization:"Bearer "+t}})})
       .then(function(x){return x.json().then(function(j){if(!x.ok)throw new Error(j.error||"Lookup failed");return j})})
       .then(function(j){r.found=j;
         if(!j.reachable)r.note="That website did not answer. Check the website address.";
         else if(!j.best)r.note="No email is printed on this website ("+j.pagesChecked+" pages checked). Try LinkedIn, or send it to Claude chat.";
-        else{r.note="";if(!r.email){r.email=j.best.email;r.emailType=j.best.label}}})
+        else{r.note="";if(!r.email){r.email=j.best.email;r.emailType=j.best.label}}
+        if(!j.best)return autoContact(dom,r.brand).then(function(a){applyAuto(r,a)})})
   }).catch(function(e){r.note=e.message}).then(function(){r.busy=false;save();draw()})}
 $("all").onclick=function(){var l=S.rows.filter(function(r){return !r.found});if(!l.length){msg("Every brand has already been searched.");return}
   l.reduce(function(p,r){return p.then(function(){return enrich(r)})},Promise.resolve()).then(function(){msg("Contact search finished for "+l.length+" brand(s).")})};
@@ -211,6 +233,11 @@ function draw(){
     if(r.domainSource&&r.domain){var ds=mk("div",null,"blk");ds.appendChild(mk("small","Website: "+r.domain+" ("+r.domainSource+")"));c.appendChild(ds)}
     c.appendChild(cl("Partnership Email",r.found&&r.found.partnership));c.appendChild(cl("Marketing / PR Email",r.found&&r.found.marketing));
     if(r.found&&r.found.reachable&&!r.found.partnership&&!r.found.marketing)c.appendChild(cl("Support Email (fallback)",r.found.support));
+    if(r.auto&&(r.auto.contact_name||r.auto.email||r.auto.linkedin_url)){var ab=mk("div",null,"blk");ab.appendChild(mk("b",r.auto.is_fallback?"Auto contact (fallback mailbox)":"Auto contact (Apollo + Hunter)"));
+      if(r.auto.contact_name)ab.appendChild(mk("code",r.auto.contact_name));
+      ab.appendChild(mk("small",(r.auto.title||"Contact")+(r.auto.email_status?" · "+r.auto.email_status:"")));
+      if(r.auto.linkedin_url){var la=mk("a","LinkedIn profile");la.href=r.auto.linkedin_url;la.target="_blank";la.rel="noreferrer";la.style.display="block";ab.appendChild(la)}
+      c.appendChild(ab)}
     if(r.note){var n=mk("div",null,"blk");n.appendChild(mk("small",r.note));c.appendChild(n)}
     if(r.found&&r.found.reachable&&!r.found.best){var lk=(r.found.programs||[]).concat(r.found.contactPages||[]);if(lk.length){var pl=mk("div",null,"blk");pl.appendChild(mk("b","Pages to try (forms or creator programs)"));lk.forEach(function(u){var a2=mk("a",String(u).replace(/^https?:\/\//,""));a2.href=u;a2.target="_blank";a2.rel="noreferrer";a2.style.display="block";pl.appendChild(a2)});c.appendChild(pl)}}
     var cn=mk("input",null,"dm");cn.value=r.cname||"";cn.placeholder="Contact name (you add)";cn.setAttribute("aria-label","Contact name for "+r.brand);cn.onchange=function(){r.cname=cn.value.trim();save()};c.appendChild(cn);
