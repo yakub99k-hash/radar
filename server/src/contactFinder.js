@@ -1,6 +1,12 @@
 'use strict';
 
-const { AppError, isCreditLimitError, CREDIT_LIMIT_MESSAGE } = require('./errors');
+const {
+  AppError,
+  isCreditLimitError,
+  creditLimitMessage,
+  normalizeProviderName,
+  MISSING_USER_KEY_MESSAGE
+} = require('./errors');
 const {
   normalizeDomain,
   emailOnDomain,
@@ -21,14 +27,19 @@ const REASONS = Object.freeze({
   EMAIL_UNVERIFIED: 'EMAIL_UNVERIFIED',
   GENERIC_EMAIL: 'GENERIC_EMAIL',
   UPSTREAM_ERROR: 'UPSTREAM_ERROR',
+  MISSING_API_KEY: 'API_KEY_MISSING',
   CREDIT_LIMIT: 'HUNTER_CREDIT_LIMIT'
 });
 
 const STRATEGIES = Object.freeze({
   APOLLO: 'apollo+hunter',
   HUNTER: 'hunter-domain-search',
+  PROSPEO: 'prospeo-search+enrich',
   GEMINI: 'gemini-text'
 });
+
+/** The providers a request may ask for (header `x-provider`). */
+const PROVIDERS = Object.freeze(['hunter', 'prospeo']);
 
 /** Loose shape check; the strict rules live in filters.analyzeEmail/emailOnDomain. */
 const EMAIL_SHAPE_RE = /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/;
@@ -72,9 +83,9 @@ function cleanName(value) {
  */
 function createContactFinder(deps = {}) {
   const apollo = deps.apollo;
-  const hunter = deps.hunter;
   const gemini = deps.gemini;
   const hunterFor = deps.hunterFor;
+  const prospeoFor = deps.prospeoFor;
   const fetchSiteText = deps.fetchSiteText;
   const logger = deps.logger;
   const cache = deps.cache;
@@ -101,23 +112,69 @@ function createContactFinder(deps = {}) {
   const ai = gemini && gemini.hasKey ? gemini : null;
 
   /**
-   * Per-request Hunter client: a key sent by the browser wins, otherwise the
-   * owner's key from HUNTER_API_KEY (the client injected as `hunter`) is used.
+   * Per-request Hunter client built from the visitor's own key.
+   * There is deliberately NO server-side fallback: HUNTER_API_KEY is never read,
+   * so a request without a key can only fail (see clientsFor below).
    */
-  function hunterClientFor(hunterApiKey) {
-    const key = typeof hunterApiKey === 'string' ? hunterApiKey.trim() : '';
-    if (key && typeof hunterFor === 'function') {
-      const client = hunterFor(key);
-      if (client) return client;
-    }
-    return hunter;
+  function hunterClientFor(apiKey) {
+    const key = typeof apiKey === 'string' ? apiKey.trim() : '';
+    if (!key || typeof hunterFor !== 'function') return null;
+    return hunterFor(key) || null;
   }
 
-  /** The card message the frontend shows when Hunter is out of credits. */
-  function creditLimitResult(meta) {
+  /** Per-request Prospeo client, same rule: the visitor's key or nothing. */
+  function prospeoClientFor(apiKey) {
+    const key = typeof apiKey === 'string' ? apiKey.trim() : '';
+    if (!key || typeof prospeoFor !== 'function') return null;
+    return prospeoFor(key) || null;
+  }
+
+  /** Reads the provider name the browser sent, defaulting to Hunter. */
+  function providerFor(request = {}) {
+    const raw = String(request.provider || '').trim().toLowerCase();
+    return PROVIDERS.includes(raw) ? raw : 'hunter';
+  }
+
+  function apiKeyFor(request = {}) {
+    // `hunterApiKey` keeps older cached pages of index.html working.
+    return String(request.apiKey || request.hunterApiKey || '').trim();
+  }
+
+  function clientsFor(provider, apiKey) {
+    if (provider === 'prospeo') {
+      const client = prospeoClientFor(apiKey);
+      if (!client) {
+        if (!apiKey) throw missingKeyError();
+        throw new AppError('Prospeo lookups are not available on this server.', {
+          status: 503,
+          code: 'PROSPEO_UNAVAILABLE'
+        });
+      }
+      return { provider, hunterClient: null, prospeoClient: client };
+    }
+    const hunterClient = hunterClientFor(apiKey);
+    if (!hunterClient) {
+      if (!apiKey) throw missingKeyError();
+      throw new AppError('Hunter lookups are not available on this server.', {
+        status: 503,
+        code: 'HUNTER_UNAVAILABLE'
+      });
+    }
+    return { provider: 'hunter', hunterClient, prospeoClient: null };
+  }
+
+  function missingKeyError() {
+    return new AppError(MISSING_USER_KEY_MESSAGE, {
+      status: 400,
+      code: REASONS.MISSING_API_KEY
+    });
+  }
+
+  /** The card message the frontend shows when the provider is out of credits. */
+  function creditLimitResult(meta, provider) {
     return buildResult({
       reason: REASONS.CREDIT_LIMIT,
-      message: CREDIT_LIMIT_MESSAGE,
+      message: creditLimitMessage(provider),
       meta
     });
   }
@@ -130,8 +187,7 @@ function createContactFinder(deps = {}) {
 
 
   /** Asks Hunter for an email using the most precise identifier first. */
-  async function lookupEmails(person, domain, h) {
-    const client = h || hunter;
+  async function lookupEmails(person, domain, client) {
     const handle = linkedinHandle(person.linkedinUrl);
     const strategies = [];
     if (handle) strategies.push({ linkedinHandle: handle });
@@ -173,8 +229,7 @@ function createContactFinder(deps = {}) {
    * email finder -> Hunter verifier.
    * @returns {Promise<object>} result object (never throws for "empty" outcomes)
    */
-  async function runApolloPath(domain, brand, h) {
-    const client = h || hunter;
+  async function runApolloPath(domain, brand, client) {
     const startedAt = now();
     const baseMeta = { domain, brand: brand || null, strategy: STRATEGIES.APOLLO };
     const rejected = [];
@@ -405,8 +460,7 @@ function createContactFinder(deps = {}) {
    * best few - reusing the status domain search already reported.
    * @returns {Promise<object>} result in the same shape as the Apollo path
    */
-  async function runHunterPath(domain, brand, apolloFailure, h) {
-    const client = h || hunter;
+  async function runHunterPath(domain, brand, apolloFailure, client) {
     const startedAt = now();
     const baseMeta = { domain, brand: brand || null, strategy: STRATEGIES.HUNTER };
     if (apolloFailure) baseMeta.apollo_error = String(apolloFailure.message || apolloFailure);
@@ -609,6 +663,248 @@ function createContactFinder(deps = {}) {
   }
 
   /**
+   * Prospeo path: /search-person lists the people who work at the brand (no
+   * emails), we rank them with the same job title rules, let Gemini pick the
+   * most likely sponsorship owner, then spend one /enrich-person credit at a
+   * time until a verified influencer/partnership address comes back.
+   * @returns {Promise<object>} result in the same shape as the Hunter path
+   */
+  async function runProspeoPath(domain, brand, client, startedAt) {
+    const baseMeta = {
+      domain,
+      brand: brand || null,
+      strategy: STRATEGIES.PROSPEO,
+      provider: 'prospeo'
+    };
+    const rejected = [];
+    const elapsed = () => now() - startedAt;
+
+    let people = [];
+    let searchedBy = 'domain';
+    try {
+      people = await client.searchPeople({ domain });
+      // A domain Prospeo does not know: retry with the brand name.
+      if (!people.length && brand) {
+        searchedBy = 'name';
+        people = await client.searchPeople({ brand });
+      }
+    } catch (err) {
+      if (err instanceof AppError && /^PROSPEO_(KEY_MISSING|BAD_INPUT|INVALID_KEY)$/.test(err.code)) {
+        throw err;
+      }
+      if (isCreditLimitError(err)) {
+        return creditLimitResult({ ...baseMeta, elapsed_ms: elapsed() }, 'prospeo');
+      }
+      if (logger) {
+        logger.error('prospeo search failed', { domain, error: err.message, code: err.code });
+      }
+      return buildResult({
+        reason: REASONS.UPSTREAM_ERROR,
+        message: `Prospeo search failed: ${err.message}`,
+        meta: { ...baseMeta, elapsed_ms: elapsed() }
+      });
+    }
+
+    const meta = (extra) => ({
+      ...baseMeta,
+      candidates: people.length,
+      searched_by: searchedBy,
+      rejected: rejected.slice(0, 5),
+      elapsed_ms: elapsed(),
+      ...extra
+    });
+
+    if (!people.length) {
+      return buildResult({
+        reason: REASONS.NO_PERSON_FOUND,
+        message: `Prospeo knows nobody at ${domain}.`,
+        meta: meta()
+      });
+    }
+
+    // Same ranking rules as the Hunter path: matching titles first, then the rest.
+    const ranked = people
+      .map((person, index) => ({ ...person, score: titleScore(person.title), index }))
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return a.index - b.index;
+      });
+    const preferred = ranked.filter((person) => person.score >= minTitleScore);
+    const others = ranked.filter((person) => person.score < minTitleScore);
+    const shortlist = [...preferred, ...others].slice(0, Math.max(maxCandidates, maxEnriched));
+
+    // Nobody has an address yet, so Gemini orders the shortlist by name + title.
+    let ordered = shortlist;
+    if (ai && shortlist.length > 1) {
+      try {
+        const pick = await ai.pickBestPerson({
+          brand,
+          domain,
+          candidates: shortlist.map((person) => ({
+            contact_name: person.fullName,
+            title: person.title
+          }))
+        });
+        if (pick && Number.isInteger(pick.index) && shortlist[pick.index]) {
+          const chosen = shortlist[pick.index];
+          ordered = [chosen, ...shortlist.filter((person) => person !== chosen)];
+          baseMeta.gemini_pick = chosen.fullName || chosen.personId || null;
+          if (pick.reason) baseMeta.gemini_reason = pick.reason;
+        }
+      } catch (err) {
+        if (logger) {
+          logger.warn('gemini ranking failed, keeping the Prospeo order', {
+            domain,
+            error: err.message
+          });
+        }
+      }
+    }
+
+    let unverified = null;
+    let fallback = null;
+    let paid = 0;
+
+    for (const person of ordered) {
+      if (paid >= maxEmailsToVerify) break;
+      paid += 1;
+
+      let enriched;
+      try {
+        enriched = await client.enrichPerson({
+          personId: person.personId,
+          firstName: person.firstName,
+          lastName: person.lastName,
+          fullName: person.fullName,
+          linkedinUrl: person.linkedinUrl,
+          domain,
+          brand
+        });
+      } catch (err) {
+        if (
+          err instanceof AppError &&
+          /^PROSPEO_(KEY_MISSING|BAD_INPUT|INVALID_KEY)$/.test(err.code)
+        ) {
+          throw err;
+        }
+        if (isCreditLimitError(err)) return creditLimitResult(meta(), 'prospeo');
+        if (logger) {
+          logger.warn('prospeo enrich failed', {
+            person: person.personId,
+            error: err.message,
+            code: err.code
+          });
+        }
+        rejected.push({ person: person.fullName || person.personId, reason: 'enrich_error' });
+        continue;
+      }
+
+      if (!enriched || !enriched.email) {
+        rejected.push({ person: person.fullName || person.personId, reason: 'no_email' });
+        continue;
+      }
+
+      if (requireBrandDomain && !emailOnDomain(enriched.email, domain)) {
+        rejected.push({ email: enriched.email, reason: 'off_domain' });
+        continue;
+      }
+
+      const fullName = cleanName(
+        [enriched.firstName, enriched.lastName].filter(Boolean).join(' ') ||
+          enriched.fullName ||
+          person.fullName
+      );
+      const title = enriched.title || person.title || null;
+      const linkedinUrl = enriched.linkedinUrl || person.linkedinUrl || null;
+      // Prospeo returns the verification status with the email, so no separate
+      // verifier call (and no extra credit) is needed.
+      const verification = {
+        email: enriched.email,
+        status: enriched.emailStatus || 'unknown',
+        result: enriched.emailStatus === 'valid' ? 'deliverable' : 'unknown',
+        score: null,
+        disposable: false,
+        webmail: false,
+        acceptAll: enriched.emailStatus === 'accept_all',
+        block: false,
+        smtpCheck: false,
+        mxRecords: false
+      };
+      const status = emailStatusLabel(verification);
+
+      if (!isAcceptedVerification(verification, verificationOptions())) {
+        if (!unverified) unverified = { email: enriched.email, status };
+        rejected.push({ email: enriched.email, reason: `verification_${status}` });
+        continue;
+      }
+
+      if (analyzeEmail(enriched.email).generic) {
+        // Rejected as a person, kept as a fallback address.
+        if (!fallback) {
+          fallback = {
+            contact_name: fullName || null,
+            title,
+            email: enriched.email,
+            email_status: status,
+            linkedin_url: linkedinUrl
+          };
+        }
+        rejected.push({ email: enriched.email, reason: 'generic' });
+        continue;
+      }
+
+      return buildResult({
+        contact_name: fullName || null,
+        title,
+        email: enriched.email,
+        email_status: status,
+        linkedin_url: linkedinUrl,
+        is_fallback: false,
+        found: true,
+        message: `${fullName || 'A contact'}${title ? ` (${title})` : ''} found via Prospeo.`,
+        meta: meta({
+          title_score: person.score,
+          verification_method: enriched.verificationMethod || null,
+          free_enrichment: enriched.free === true
+        })
+      });
+    }
+
+    if (fallback) {
+      return buildResult({
+        contact_name: fallback.contact_name,
+        title: fallback.title,
+        email: fallback.email,
+        email_status: fallback.email_status,
+        linkedin_url: fallback.linkedin_url,
+        is_fallback: true,
+        found: false,
+        reason: REASONS.GENERIC_EMAIL,
+        message: `Only the generic mailbox ${fallback.email} was found at ${domain}, so it is marked as a fallback.`,
+        meta: meta()
+      });
+    }
+
+    if (unverified) {
+      return buildResult({
+        reason: REASONS.EMAIL_UNVERIFIED,
+        email_status: unverified.status,
+        message: `Prospeo found ${unverified.email} at ${domain} but could not verify it (status: ${unverified.status}).`,
+        meta: meta()
+      });
+    }
+
+    return buildResult({
+      reason: REASONS.NO_EMAIL_FOUND,
+      message: `Prospeo listed ${people.length} person(s) at ${domain}, but none has a verified influencer or partnership email.`,
+      meta: meta()
+    });
+  }
+
+
+
+
+  /**
    * Asks Gemini for addresses in the brand's page text. Never throws: a missing
    * key, a timeout or nonsense output simply means "no AI answer".
    */
@@ -653,39 +949,54 @@ function createContactFinder(deps = {}) {
   }
 
   /**
-   * Runs the Apollo path, then the Hunter path, without the Gemini text scan.
+   * Runs the provider the browser asked for, without the Gemini text scan.
+   *
+   *   hunter  -> (optional Apollo, see options.useApollo) Hunter domain search
+   *   prospeo -> Prospeo search-person + enrich-person
+   *
+   * @param {object} clients result of clientsFor(): never a server-side key
    * @returns {Promise<object>} result object (never throws for "empty" outcomes)
    */
-  async function runStrategies(domain, brand, h, startedAt) {
-    const canAskHunter = typeof h.domainSearch === 'function';
+  async function runStrategies(domain, brand, clients, startedAt) {
+    if (clients.provider === 'prospeo') {
+      return runProspeoPath(domain, brand, clients.prospeoClient, startedAt);
+    }
+
+    const h = clients.hunterClient;
+    const canAskHunter = Boolean(h) && typeof h.domainSearch === 'function';
+    // Apollo is billed to the owner's own APOLLO_API_KEY, so it only runs when the
+    // owner explicitly turned it on (CONTACT_USE_APOLLO) and a key exists.
+    const canAskApollo = Boolean(apollo) && typeof apollo.searchPeople === 'function';
     let apolloResult = null;
     let apolloFailure = null;
 
-    try {
-      apolloResult = await runApolloPath(domain, brand, h);
-    } catch (err) {
-      // Thrown for APOLLO_KEY_MISSING only; other outages come back as a result.
-      apolloFailure = err.message || String(err);
-      if (!canAskHunter) {
-        // Nothing else can answer: keep the old contract for the HTTP layer.
-        if (err instanceof AppError && err.code === 'APOLLO_KEY_MISSING') throw err;
-        return buildResult({
-          reason: REASONS.UPSTREAM_ERROR,
-          message: `Apollo search failed: ${err.message}`,
-          meta: {
+    if (canAskApollo) {
+      try {
+        apolloResult = await runApolloPath(domain, brand, h);
+      } catch (err) {
+        // Thrown for APOLLO_KEY_MISSING only; other outages come back as a result.
+        apolloFailure = err.message || String(err);
+        if (!canAskHunter) {
+          // Nothing else can answer: keep the old contract for the HTTP layer.
+          if (err instanceof AppError && err.code === 'APOLLO_KEY_MISSING') throw err;
+          return buildResult({
+            reason: REASONS.UPSTREAM_ERROR,
+            message: `Apollo search failed: ${err.message}`,
+            meta: {
+              domain,
+              brand: brand || null,
+              strategy: STRATEGIES.APOLLO,
+              elapsed_ms: now() - startedAt
+            }
+          });
+        }
+        if (logger) {
+          logger.warn('apollo unavailable, using Hunter domain search instead', {
             domain,
-            brand: brand || null,
-            strategy: STRATEGIES.APOLLO,
-            elapsed_ms: now() - startedAt
-          }
-        });
-      }
-      if (logger) {
-        logger.warn('apollo unavailable, using Hunter domain search instead', {
-          domain,
-          error: err.message,
-          code: err.code
-        });
+            error: err.message,
+            code: err.code
+          });
+        }
       }
     }
 
@@ -724,16 +1035,18 @@ function createContactFinder(deps = {}) {
    * Runs the pipeline for one brand domain.
    *
    * 1. Gemini reads the page text first: a printed address there costs no credits.
-   * 2. Apollo answers when it can (titles + LinkedIn), Hunter otherwise.
+   * 2. The visitor's provider answers: Hunter domain search or Prospeo.
    * 3. A role mailbox found by Gemini is offered when nothing else worked.
    *
    * @param {{domain: string, brand?: string, pageText?: string,
-   *          hunterApiKey?: string}} params
+   *          provider?: string, apiKey?: string, hunterApiKey?: string}} params
    * @returns {Promise<object>} result object (never throws for "empty" outcomes)
    */
   async function run(domain, brand, request = {}) {
     const startedAt = now();
-    const h = hunterClientFor(request.hunterApiKey);
+    const provider = providerFor(request);
+    // No key, no lookup: the owner's HUNTER_API_KEY is never used as a fallback.
+    const clients = clientsFor(provider, apiKeyFor(request));
 
     const scanned = await scanTextWithGemini(domain, brand, request.pageText);
     const fromText = classifyGeminiEmails(scanned, domain);
@@ -745,18 +1058,19 @@ function createContactFinder(deps = {}) {
         is_fallback: false,
         found: true,
         email_source: 'gemini',
-        message: `Gemini found ${email} in the brand's page text, so no Hunter credits were used.`,
+        message: `Gemini found ${email} in the brand's page text, so no ${provider === 'prospeo' ? 'Prospeo' : 'Hunter'} credits were used.`,
         meta: {
           domain,
           brand: brand || null,
           strategy: STRATEGIES.GEMINI,
+          provider,
           gemini_emails: fromText.personal.slice(0, 3),
           elapsed_ms: now() - startedAt
         }
       });
     }
 
-    const result = await runStrategies(domain, brand, h, startedAt);
+    const result = await runStrategies(domain, brand, clients, startedAt);
     if (fromText.generic.length && !result.found && !result.is_fallback) {
       const email = fromText.generic[0];
       return buildResult({
@@ -775,9 +1089,15 @@ function createContactFinder(deps = {}) {
 
   /**
    * Public entry point. Caches results and de-duplicates concurrent lookups so
-   * a double click cannot spend Apollo/Hunter credits twice.
+   * a double click cannot spend the visitor's credits twice.
+   *
+   * The visitor's own key is mandatory here: without it no provider is called at
+   * all, so the site owner's credits can never be spent by someone else.
    */
   async function findContact(params = {}) {
+    const apiKey = apiKeyFor(params);
+    if (!apiKey) throw missingKeyError();
+
     const domain = normalizeDomain(params.domain);
     if (!domain) {
       throw new AppError('A valid brand domain is required (for example "brand.com").', {
@@ -785,8 +1105,10 @@ function createContactFinder(deps = {}) {
         code: REASONS.INVALID_DOMAIN
       });
     }
+    const provider = providerFor(params);
     const brand = String(params.brand || '').trim().slice(0, 120);
-    const cacheKey = `contact:v1:${domain}`;
+    // Results differ per provider, so the provider is part of the cache key.
+    const cacheKey = `contact:v2:${provider}:${domain}`;
 
     const cached = cache && cache.get(cacheKey);
     if (cached) {

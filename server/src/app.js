@@ -1,12 +1,17 @@
 'use strict';
 
 const express = require('express');
-const { AppError } = require('./errors');
+const { AppError, MISSING_USER_KEY_MESSAGE } = require('./errors');
 
-/** Browsers send their own Hunter key in this header (never in the URL). */
-const HUNTER_KEY_HEADER = 'x-hunter-api-key';
+/** Browsers send the chosen provider and their own key in these headers. */
+const PROVIDER_HEADER = 'x-provider';
+const API_KEY_HEADER = 'x-api-key';
+/** Older cached pages of index.html still send this one; it maps to Hunter. */
+const LEGACY_HUNTER_KEY_HEADER = 'x-hunter-api-key';
 const MAX_PAGE_TEXT_CHARS = 40000;
-const MAX_HUNTER_KEY_CHARS = 200;
+const MAX_API_KEY_CHARS = 200;
+const PROVIDERS = ['hunter', 'prospeo'];
+const DEFAULT_PROVIDER = 'hunter';
 
 /** CORS that matches the static frontend (GitHub Pages + local dev). */
 function corsMiddleware(allowedOrigins) {
@@ -20,8 +25,12 @@ function corsMiddleware(allowedOrigins) {
       res.setHeader('Vary', 'Origin');
     }
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-    // X-Hunter-Api-Key lets a user spend their own Hunter credits from the browser.
-    res.setHeader('Access-Control-Allow-Headers', 'Authorization,Content-Type,X-Hunter-Api-Key');
+    // X-Provider + X-Api-Key let a visitor spend their own Hunter/Prospeo credits
+    // from the browser. X-Hunter-Api-Key stays for pages cached before the switch.
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'Authorization,Content-Type,X-Provider,X-Api-Key,X-Hunter-Api-Key'
+    );
     res.setHeader('Access-Control-Max-Age', '600');
     if (req.method === 'OPTIONS') return res.status(204).end();
     return next();
@@ -76,8 +85,10 @@ function createApp(deps = {}) {
     ok: true,
     service: 'radar-contact-finder',
     version,
-    apollo: Boolean(config.apollo && config.apollo.apiKey),
-    hunter: Boolean(config.hunter && config.hunter.apiKey),
+    // Hunter and Prospeo are always answered with the visitor's own key.
+    providers: PROVIDERS,
+    userKeysRequired: true,
+    apollo: Boolean(config.pipeline && config.pipeline.useApollo && config.apollo && config.apollo.apiKey),
     gemini: Boolean(config.gemini && config.gemini.apiKey),
     auth: Boolean(config.auth && config.auth.requireAuth),
     uptime_s: Math.round(process.uptime())
@@ -97,6 +108,31 @@ function createApp(deps = {}) {
     res.json(health);
   });
 
+  /** Reads the provider the browser wants; anything unknown is a clear 400. */
+  function providerFrom(req, source) {
+    const raw = firstValue(req.get(PROVIDER_HEADER), source.provider, source.provider_name);
+    const provider = raw.toLowerCase();
+    if (!provider) return DEFAULT_PROVIDER;
+    if (!PROVIDERS.includes(provider)) {
+      throw new AppError(`Unknown provider "${raw}". Use "hunter" or "prospeo".`, {
+        status: 400,
+        code: 'INVALID_PROVIDER'
+      });
+    }
+    return provider;
+  }
+
+  /**
+   * The visitor's own key. Headers are the real path (the browser sends
+   * `x-api-key`); a JSON body field is accepted for curl users, but never a query
+   * string, so a key can not end up in server access logs or browser history.
+   */
+  function apiKeyFrom(req, source) {
+    const headerKey = firstValue(req.get(API_KEY_HEADER), req.get(LEGACY_HUNTER_KEY_HEADER));
+    const bodyKey = req.method === 'POST' ? firstValue(source.apiKey, source.api_key) : '';
+    return firstValue(headerKey, bodyKey).slice(0, MAX_API_KEY_CHARS);
+  }
+
   async function contactHandler(req, res, next) {
     try {
       const source = req.method === 'POST' ? req.body || {} : req.query || {};
@@ -110,22 +146,21 @@ function createApp(deps = {}) {
         });
       }
 
-      // A user's own Hunter key wins over the server's key for this request only.
-      const allowUserKey = !(config.hunter && config.hunter.allowUserKey === false);
-      const hunterApiKey = allowUserKey
-        ? firstValue(req.get(HUNTER_KEY_HEADER), source.hunter_api_key, source.hunterApiKey).slice(
-            0,
-            MAX_HUNTER_KEY_CHARS
-          )
-        : '';
+      const provider = providerFrom(req, source);
+      const apiKey = apiKeyFrom(req, source);
+      if (!apiKey) {
+        throw new AppError(MISSING_USER_KEY_MESSAGE, {
+          status: 400,
+          code: 'API_KEY_MISSING'
+        });
+      }
 
       // Page text the browser already scraped, so Gemini can look for hidden emails.
       const pageText = String(
         firstValue(source.pageText, source.page_text, source.website_text, source.text)
       ).slice(0, MAX_PAGE_TEXT_CHARS);
 
-      const params = { domain, brand };
-      if (hunterApiKey) params.hunterApiKey = hunterApiKey;
+      const params = { domain, brand, provider, apiKey };
       if (pageText) params.pageText = pageText;
 
       const result = await pipeline.findContact(params);

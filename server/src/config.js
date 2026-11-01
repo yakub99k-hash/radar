@@ -68,7 +68,8 @@ function buildConfig(env = process.env) {
     },
 
     hunter: {
-      apiKey: String(env.HUNTER_API_KEY || '').trim(),
+      // No server-side key on purpose: every Hunter call uses the visitor's own
+      // key from the browser (x-api-key), so the owner's credits are never spent.
       baseUrl: stripTrailingSlash(env.HUNTER_BASE_URL || 'https://api.hunter.io'),
       acceptStatuses: toList(env.HUNTER_ACCEPT_STATUSES, ['valid', 'deliverable']).map((s) =>
         s.toLowerCase()
@@ -76,9 +77,16 @@ function buildConfig(env = process.env) {
       pollAttempts: Math.min(Math.max(toInt(env.HUNTER_POLL_ATTEMPTS, 3), 1), 10),
       pollDelayMs: Math.max(toInt(env.HUNTER_POLL_DELAY_MS, 1500), 250),
       // Rows requested from /v2/domain-search when Hunter does the work alone.
-      domainSearchLimit: Math.min(Math.max(toInt(env.HUNTER_DOMAIN_SEARCH_LIMIT, 10), 1), 100),
-      // Per-request keys sent by the browser in x-hunter-api-key.
-      allowUserKey: toBool(env.ALLOW_USER_HUNTER_KEY, true)
+      domainSearchLimit: Math.min(Math.max(toInt(env.HUNTER_DOMAIN_SEARCH_LIMIT, 10), 1), 100)
+    },
+
+    prospeo: {
+      // Same rule as Hunter: the visitor's own key is required for every call.
+      baseUrl: stripTrailingSlash(env.PROSPEO_BASE_URL || 'https://api.prospeo.io'),
+      // People pulled from /search-person before ranking them locally.
+      searchLimit: Math.min(Math.max(toInt(env.PROSPEO_SEARCH_LIMIT, 25), 1), 25),
+      // Only accept people whose email Prospeo verified (costs stay predictable).
+      onlyVerifiedEmail: toBool(env.PROSPEO_ONLY_VERIFIED_EMAIL, false)
     },
 
     gemini: {
@@ -97,10 +105,13 @@ function buildConfig(env = process.env) {
       cacheTtlMs: Math.max(toInt(env.CACHE_TTL_SECONDS, 21600), 0) * 1000,
       negativeCacheTtlMs: Math.max(toInt(env.CACHE_NEGATIVE_TTL_SECONDS, 1800), 0) * 1000,
       maxConcurrentLookups: Math.min(Math.max(toInt(env.MAX_CONCURRENT_LOOKUPS, 3), 1), 16),
-      // Gemini reads the page text before Hunter is paid for anything.
+      // Gemini reads the page text before any provider is paid for anything.
       geminiEmailScan: toBool(env.GEMINI_EMAIL_SCAN, true),
       // Website text is fetched server-side only when the browser sends none.
-      siteTextTimeoutMs: Math.max(toInt(env.SITE_TEXT_TIMEOUT_MS, 6000), 500)
+      siteTextTimeoutMs: Math.max(toInt(env.SITE_TEXT_TIMEOUT_MS, 6000), 500),
+      // Apollo is billed to APOLLO_API_KEY, so it stays off unless the owner opts
+      // in: visitors' lookups must run on the visitor's own Hunter/Prospeo key.
+      useApollo: toBool(env.CONTACT_USE_APOLLO, false)
     },
 
     auth: {
@@ -123,13 +134,15 @@ function buildConfig(env = process.env) {
 
 /**
  * Human friendly list of what is missing, used at boot and in /healthz.
+ * Hunter and Prospeo need no server key: each visitor brings their own.
  */
 function configSummary(config) {
   return {
-    apollo: Boolean(config.apollo.apiKey),
-    hunter: Boolean(config.hunter.apiKey),
+    apollo: config.pipeline && config.pipeline.useApollo ? Boolean(config.apollo.apiKey) : false,
     gemini: Boolean(config.gemini && config.gemini.apiKey),
-    auth: config.auth.requireAuth ? Boolean(config.auth.firebaseWebApiKey) : false
+    auth: config.auth.requireAuth ? Boolean(config.auth.firebaseWebApiKey) : false,
+    providers: ['hunter', 'prospeo'],
+    userKeysRequired: true
   };
 }
 

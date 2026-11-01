@@ -4,6 +4,7 @@ const { buildConfig, configSummary, loadEnvFiles } = require('./config');
 const { createLogger } = require('./logger');
 const { createApolloClient } = require('./apollo');
 const { createHunterClient } = require('./hunter');
+const { createProspeoClient } = require('./prospeo');
 const { createContactFinder } = require('./contactFinder');
 const { createGeminiClient } = require('./gemini');
 const { fetchSiteText } = require('./siteText');
@@ -23,20 +24,14 @@ function buildServices(config, logger, options = {}) {
     fetchImpl
   });
 
-  const hunter = createHunterClient({
-    ...config.hunter,
-    logger,
-    timeoutMs: config.http.timeoutMs,
-    retries: config.http.retries,
-    fetchImpl
-  });
-
-  // A key sent by the browser gets its own client, so the owner's key is never
-  // spent for that request. Cached per key; the map stays small in practice.
+  // Hunter and Prospeo are never called with a server-side key: each request
+  // carries the visitor's own key, and the client for it is cached by key so the
+  // site owner's credits are never spent by somebody else. The map stays small
+  // in practice because it only holds keys seen in the last few minutes.
   const hunterClients = new Map();
-  function hunterFor(hunterApiKey) {
-    const key = String(hunterApiKey || '').trim();
-    if (!key || key === config.hunter.apiKey) return hunter;
+  function hunterFor(apiKey) {
+    const key = String(apiKey || '').trim();
+    if (!key) return null;
     if (!hunterClients.has(key)) {
       hunterClients.set(
         key,
@@ -53,6 +48,26 @@ function buildServices(config, logger, options = {}) {
     return hunterClients.get(key);
   }
 
+  const prospeoClients = new Map();
+  function prospeoFor(apiKey) {
+    const key = String(apiKey || '').trim();
+    if (!key) return null;
+    if (!prospeoClients.has(key)) {
+      prospeoClients.set(
+        key,
+        createProspeoClient({
+          ...config.prospeo,
+          apiKey: key,
+          logger,
+          timeoutMs: config.http.timeoutMs,
+          retries: config.http.retries,
+          fetchImpl
+        })
+      );
+    }
+    return prospeoClients.get(key);
+  }
+
   const gemini = createGeminiClient({
     apiKey: config.gemini && config.gemini.apiKey,
     model: config.gemini && config.gemini.model,
@@ -62,10 +77,11 @@ function buildServices(config, logger, options = {}) {
   });
 
   const finder = createContactFinder({
-    apollo,
-    hunter,
+    // Apollo is billed to the owner's key, so it is only wired in on request.
+    apollo: config.pipeline.useApollo ? apollo : null,
     gemini,
     hunterFor,
+    prospeoFor,
     fetchSiteText:
       options.fetchSiteText ||
       ((domain) =>
@@ -108,7 +124,7 @@ function buildServices(config, logger, options = {}) {
     cache: createTtlCache({ ttlMs: 120000, maxEntries: 1000 })
   });
 
-  return { apollo, hunter, finder, pipeline, authMiddleware };
+  return { apollo, hunterFor, prospeoFor, finder, pipeline, authMiddleware };
 }
 
 function main() {
@@ -118,11 +134,8 @@ function main() {
   const config = buildConfig();
   const summary = configSummary(config);
 
-  if (!summary.apollo) {
-    logger.warn('APOLLO_API_KEY is missing: using the Hunter domain search pipeline instead.');
-  }
-  if (!summary.hunter) {
-    logger.warn('HUNTER_API_KEY is missing: /api/brand-contact will answer 503 until it is set.');
+  if (config.pipeline.useApollo && !summary.apollo) {
+    logger.warn('CONTACT_USE_APOLLO is on but APOLLO_API_KEY is missing: Apollo is skipped.');
   }
   if (!summary.gemini) {
     logger.warn('GEMINI_API_KEY is missing: the AI email scan and contact ranking are skipped.');
@@ -133,6 +146,7 @@ function main() {
   if (!config.cors.allowedOrigins.length) {
     logger.warn('ALLOWED_ORIGINS is empty: the API accepts browser calls from any origin.');
   }
+  logger.info('contact lookups run on the visitor\'s own Hunter or Prospeo key');
 
   const services = buildServices(config, logger);
   const app = createApp({ config, logger, pipeline: services.pipeline, authMiddleware: services.authMiddleware });
@@ -140,8 +154,8 @@ function main() {
   const server = app.listen(config.port, () => {
     logger.info('radar contact finder listening', {
       port: config.port,
+      providers: summary.providers,
       apollo: summary.apollo,
-      hunter: summary.hunter,
       gemini: summary.gemini,
       auth: summary.auth
     });

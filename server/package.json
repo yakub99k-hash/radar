@@ -2,7 +2,7 @@
   "name": "radar-contact-finder",
   "version": "1.0.0",
   "private": true,
-  "description": "Apollo.io + Hunter.io fallback contact finder for Yaqubu Radar",
+  "description": "Hunter.io + Prospeo.io fallback contact finder for Yaqubu Radar (per-visitor keys)",
   "main": "src/index.js",
   "engines": {
     "node": ">=20"

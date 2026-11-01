@@ -20,8 +20,8 @@ function createHunterClient(options = {}) {
 
   function requireKey() {
     if (!apiKey) {
-      throw new AppError('Hunter API key is not configured (set HUNTER_API_KEY in .env).', {
-        status: 503,
+      throw new AppError('Hunter API key is missing. Please add your own API key first.', {
+        status: 400,
         code: 'HUNTER_KEY_MISSING'
       });
     }

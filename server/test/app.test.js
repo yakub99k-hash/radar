@@ -6,6 +6,9 @@ const assert = require('node:assert/strict');
 const { createApp } = require('../src/app');
 const { AppError } = require('../src/errors');
 
+/** Every lookup must carry the visitor's own provider + key headers. */
+const KEY_HEADERS = { 'x-provider': 'hunter', 'x-api-key': 'user-key-9' };
+
 const baseConfig = {
   trustProxy: true,
   cors: { allowedOrigins: ['https://radar.yaqubu.com'] },
@@ -40,14 +43,18 @@ const FOUND = {
 };
 
 test('healthz reports which keys are configured', async () => {
-  const server = await listen(createApp({ config: baseConfig, pipeline: { findContact: async () => FOUND } }));
+  const config = { ...baseConfig, pipeline: { useApollo: false } };
+  const server = await listen(createApp({ config, pipeline: { findContact: async () => FOUND } }));
   try {
     const res = await fetch(`${server.url}/healthz`);
     const body = await res.json();
     assert.equal(res.status, 200);
     assert.equal(body.ok, true);
-    assert.equal(body.apollo, true);
-    assert.equal(body.hunter, true);
+    assert.deepEqual(body.providers, ['hunter', 'prospeo']);
+    assert.equal(body.userKeysRequired, true);
+    // No server-side Hunter key exists any more, so it is never advertised.
+    assert.equal(body.hunter, undefined);
+    assert.equal(body.apollo, false);
   } finally {
     await server.close();
   }
@@ -63,12 +70,19 @@ test('GET /api/brand-contact returns the clean JSON to the frontend', async () =
   };
   const server = await listen(createApp({ config: baseConfig, pipeline }));
   try {
-    const res = await fetch(`${server.url}/api/brand-contact?domain=brand.com&brand=Brand`);
+    const res = await fetch(`${server.url}/api/brand-contact?domain=brand.com&brand=Brand`, {
+      headers: KEY_HEADERS
+    });
     const body = await res.json();
 
     assert.equal(res.status, 200);
     assert.equal(res.headers.get('cache-control'), 'no-store');
-    assert.deepEqual(calls[0], { domain: 'brand.com', brand: 'Brand' });
+    assert.deepEqual(calls[0], {
+      domain: 'brand.com',
+      brand: 'Brand',
+      provider: 'hunter',
+      apiKey: 'user-key-9'
+    });
     assert.deepEqual(Object.keys(body).slice(0, 4), [
       'contact_name',
       'title',
@@ -87,7 +101,7 @@ test('POST /api/brand-contact also works (JSON body)', async () => {
   try {
     const res = await fetch(`${server.url}/api/brand-contact`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...KEY_HEADERS },
       body: JSON.stringify({ domain: 'https://brand.com', brand: 'Brand' })
     });
     assert.equal(res.status, 200);
@@ -127,7 +141,9 @@ test('AppErrors keep their status, unknown errors become 500', async () => {
     code: 'APOLLO_KEY_MISSING'
   })));
   try {
-    const res = await fetch(`${server.url}/api/brand-contact?domain=brand.com`);
+    const res = await fetch(`${server.url}/api/brand-contact?domain=brand.com`, {
+      headers: KEY_HEADERS
+    });
     const body = await res.json();
     assert.equal(res.status, 503);
     assert.equal(body.code, 'APOLLO_KEY_MISSING');
@@ -137,7 +153,9 @@ test('AppErrors keep their status, unknown errors become 500', async () => {
 
   server = await listen(making(new Error('kaboom')));
   try {
-    const res = await fetch(`${server.url}/api/brand-contact?domain=brand.com`);
+    const res = await fetch(`${server.url}/api/brand-contact?domain=brand.com`, {
+      headers: KEY_HEADERS
+    });
     const body = await res.json();
     assert.equal(res.status, 500);
     assert.equal(body.error, 'kaboom');
@@ -151,12 +169,12 @@ test('CORS only allows the configured origin and answers preflight', async () =>
   const server = await listen(createApp({ config: baseConfig, pipeline: { findContact: async () => FOUND } }));
   try {
     const allowed = await fetch(`${server.url}/api/brand-contact?domain=brand.com`, {
-      headers: { Origin: 'https://radar.yaqubu.com' }
+      headers: { Origin: 'https://radar.yaqubu.com', ...KEY_HEADERS }
     });
     assert.equal(allowed.headers.get('access-control-allow-origin'), 'https://radar.yaqubu.com');
 
     const other = await fetch(`${server.url}/api/brand-contact?domain=brand.com`, {
-      headers: { Origin: 'https://evil.example' }
+      headers: { Origin: 'https://evil.example', ...KEY_HEADERS }
     });
     assert.equal(other.headers.get('access-control-allow-origin'), null);
 
@@ -183,7 +201,7 @@ test('unknown routes 404 as JSON', async () => {
   }
 });
 
-test("a user's Hunter key and page text reach the pipeline", async () => {
+test("the chosen provider, the visitor's key and the page text reach the pipeline", async () => {
   const calls = [];
   const pipeline = {
     async findContact(params) {
@@ -194,15 +212,19 @@ test("a user's Hunter key and page text reach the pipeline", async () => {
   const server = await listen(createApp({ config: baseConfig, pipeline }));
   try {
     const get = await fetch(`${server.url}/api/brand-contact?domain=brand.com&brand=Brand`, {
-      headers: { 'x-hunter-api-key': 'user-key-9', Origin: 'https://radar.yaqubu.com' }
+      headers: { 'x-provider': 'prospeo', 'x-api-key': 'prospeo-key', Origin: 'https://radar.yaqubu.com' }
     });
     assert.equal(get.status, 200);
-    assert.equal(calls[0].hunterApiKey, 'user-key-9');
-    assert.deepEqual(Object.keys(calls[0]).sort(), ['brand', 'domain', 'hunterApiKey']);
+    assert.deepEqual(calls[0], {
+      domain: 'brand.com',
+      brand: 'Brand',
+      provider: 'prospeo',
+      apiKey: 'prospeo-key'
+    });
 
     const post = await fetch(`${server.url}/api/brand-contact`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-hunter-api-key': 'user-key-9' },
+      headers: { 'Content-Type': 'application/json', ...KEY_HEADERS },
       body: JSON.stringify({
         domain: 'brand.com',
         brand: 'Brand',
@@ -211,13 +233,14 @@ test("a user's Hunter key and page text reach the pipeline", async () => {
     });
     assert.equal(post.status, 200);
     assert.equal(calls[1].pageText.length, 120);
-    assert.equal(calls[1].hunterApiKey, 'user-key-9');
+    assert.equal(calls[1].provider, 'hunter');
+    assert.equal(calls[1].apiKey, 'user-key-9');
   } finally {
     await server.close();
   }
 });
 
-test('without the header the pipeline gets no per-request key', async () => {
+test('a missing key is a 400 with the "add your own key" message', async () => {
   const calls = [];
   const pipeline = {
     async findContact(params) {
@@ -227,14 +250,38 @@ test('without the header the pipeline gets no per-request key', async () => {
   };
   const server = await listen(createApp({ config: baseConfig, pipeline }));
   try {
-    await fetch(`${server.url}/api/brand-contact?domain=brand.com&brand=Brand`);
-    assert.deepEqual(calls[0], { domain: 'brand.com', brand: 'Brand' });
+    const res = await fetch(`${server.url}/api/brand-contact?domain=brand.com&brand=Brand`, {
+      headers: { 'x-provider': 'prospeo' }
+    });
+    const body = await res.json();
+
+    assert.equal(res.status, 400);
+    assert.equal(body.code, 'API_KEY_MISSING');
+    assert.equal(body.error, 'Please add your own API key first.');
+    assert.deepEqual(calls, [], 'the pipeline (and any paid API) was never called');
   } finally {
     await server.close();
   }
 });
 
-test('ALLOW_USER_HUNTER_KEY=false ignores a browser key', async () => {
+test('an unknown provider is rejected before any paid call', async () => {
+  const server = await listen(createApp({
+    config: baseConfig,
+    pipeline: { findContact: async () => FOUND }
+  }));
+  try {
+    const res = await fetch(`${server.url}/api/brand-contact?domain=brand.com`, {
+      headers: { 'x-provider': 'apollo', 'x-api-key': 'k' }
+    });
+    const body = await res.json();
+    assert.equal(res.status, 400);
+    assert.equal(body.code, 'INVALID_PROVIDER');
+  } finally {
+    await server.close();
+  }
+});
+
+test("the old x-hunter-api-key header still works for cached pages", async () => {
   const calls = [];
   const pipeline = {
     async findContact(params) {
@@ -242,19 +289,20 @@ test('ALLOW_USER_HUNTER_KEY=false ignores a browser key', async () => {
       return FOUND;
     }
   };
-  const config = { ...baseConfig, hunter: { apiKey: 'h', allowUserKey: false } };
-  const server = await listen(createApp({ config, pipeline }));
+  const server = await listen(createApp({ config: baseConfig, pipeline }));
   try {
-    await fetch(`${server.url}/api/brand-contact?domain=brand.com`, {
-      headers: { 'x-hunter-api-key': 'ignored-key' }
+    const res = await fetch(`${server.url}/api/brand-contact?domain=brand.com`, {
+      headers: { 'x-hunter-api-key': 'legacy-key' }
     });
-    assert.deepEqual(calls[0], { domain: 'brand.com', brand: '' });
+    assert.equal(res.status, 200);
+    assert.equal(calls[0].provider, 'hunter');
+    assert.equal(calls[0].apiKey, 'legacy-key');
   } finally {
     await server.close();
   }
 });
 
-test('CORS preflight allows the X-Hunter-Api-Key header', async () => {
+test('CORS preflight allows the X-Provider and X-Api-Key headers', async () => {
   const server = await listen(createApp({ config: baseConfig, pipeline: { findContact: async () => FOUND } }));
   try {
     const preflight = await fetch(`${server.url}/api/brand-contact`, {
@@ -262,11 +310,13 @@ test('CORS preflight allows the X-Hunter-Api-Key header', async () => {
       headers: {
         Origin: 'https://radar.yaqubu.com',
         'Access-Control-Request-Method': 'GET',
-        'Access-Control-Request-Headers': 'authorization,x-hunter-api-key'
+        'Access-Control-Request-Headers': 'authorization,x-provider,x-api-key'
       }
     });
     assert.equal(preflight.status, 204);
-    assert.match(preflight.headers.get('access-control-allow-headers'), /X-Hunter-Api-Key/);
+    const allowed = preflight.headers.get('access-control-allow-headers');
+    assert.match(allowed, /X-Provider/);
+    assert.match(allowed, /X-Api-Key/);
     assert.equal(preflight.headers.get('access-control-allow-origin'), 'https://radar.yaqubu.com');
   } finally {
     await server.close();
