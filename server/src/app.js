@@ -123,16 +123,14 @@ function createApp(deps = {}) {
   }
 
   /**
-   * The visitor's own key, from the headers only (a body field is accepted for
-   * curl users). No server-side key exists, so a missing key is a hard error
-   * instead of a silent charge to the site owner's account.
+   * The visitor's own key. Headers are the real path (the browser sends
+   * `x-api-key`); a JSON body field is accepted for curl users, but never a query
+   * string, so a key can not end up in server access logs or browser history.
    */
   function apiKeyFrom(req, source) {
     const headerKey = firstValue(req.get(API_KEY_HEADER), req.get(LEGACY_HUNTER_KEY_HEADER));
-    return firstValue(headerKey, source.apiKey, source.api_key, source.hunter_api_key).slice(
-      0,
-      MAX_API_KEY_CHARS
-    );
+    const bodyKey = req.method === 'POST' ? firstValue(source.apiKey, source.api_key) : '';
+    return firstValue(headerKey, bodyKey).slice(0, MAX_API_KEY_CHARS);
   }
 
   async function contactHandler(req, res, next) {
