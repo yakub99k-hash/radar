@@ -7,23 +7,28 @@ const {
   createGeminiClient,
   extractEmails,
   parseEmailList,
-  parsePick
+  parsePick,
+  parsePersonPick
 } = require('../src/gemini');
 const { silentLogger } = require('../src/logger');
 
 function fakeSdk(answer) {
   const calls = [];
+  // The prompt text of every call, handy for the ranking assertions.
+  const prompts = [];
   const factory = (options) => ({
     options,
     models: {
       async generateContent(request) {
         calls.push(request);
+        if (request && typeof request.contents === 'string') prompts.push(request.contents);
         if (typeof answer === 'function') return answer(request);
         return { text: answer };
       }
     }
   });
   factory.calls = calls;
+  factory.prompts = prompts;
   return factory;
 }
 
@@ -128,4 +133,46 @@ test('a missing key and a slow model both fail with a typed error', async () => 
     () => slow.findEmails({ text: 'y'.repeat(80) }),
     (err) => err.code === 'GEMINI_TIMEOUT'
   );
+});
+
+test('parsePersonPick reads the 1-based position and rejects nonsense', () => {
+  assert.deepEqual(parsePersonPick('{"index": 2, "reason": "owns partnerships"}'), {
+    index: 1,
+    reason: 'owns partnerships'
+  });
+  assert.deepEqual(parsePersonPick('answer: 3'), { index: 2, reason: null });
+  assert.equal(parsePersonPick('{"index": null}').index, null);
+  assert.equal(parsePersonPick('nothing useful').index, null);
+});
+
+test('pickBestPerson asks Gemini to rank people that have no email yet', async () => {
+  const sdk = fakeSdk('{"index": 2, "reason": "partnerships"}');
+  const picked = await createGeminiClient({ apiKey: 'k', sdkFactory: sdk }).pickBestPerson({
+    brand: 'Brand',
+    candidates: [
+      { contact_name: 'Jane Doe', title: 'Influencer Marketing Manager' },
+      { contact_name: 'Sam Poe', title: 'Partnerships Manager' }
+    ]
+  });
+  assert.equal(picked.index, 1);
+  assert.equal(picked.reason, 'partnerships');
+  assert.match(sdk.prompts[0], /Jane Doe \| Influencer Marketing Manager/);
+  assert.match(sdk.prompts[0], /Sam Poe \| Partnerships Manager/);
+});
+
+test('pickBestPerson ignores an out-of-range answer', async () => {
+  const sdk = fakeSdk('{"index": 9}');
+  const picked = await createGeminiClient({ apiKey: 'k', sdkFactory: sdk }).pickBestPerson({
+    candidates: [{ contact_name: 'A', title: 'x' }, { contact_name: 'B', title: 'y' }]
+  });
+  assert.equal(picked, null);
+});
+
+test('pickBestPerson does nothing with a single candidate', async () => {
+  const sdk = fakeSdk('{"index": 1}');
+  const picked = await createGeminiClient({ apiKey: 'k', sdkFactory: sdk }).pickBestPerson({
+    candidates: [{ contact_name: 'A', title: 'x' }]
+  });
+  assert.equal(picked, null);
+  assert.equal(sdk.calls.length, 0, 'no tokens spent when there is nothing to choose');
 });

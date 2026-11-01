@@ -68,7 +68,7 @@ const JANE = {
 };
 
 function makeGemini(config = {}) {
-  const calls = { findEmails: [], pickBestContact: [] };
+  const calls = { findEmails: [], pickBestContact: [], pickBestPerson: [] };
   return {
     calls,
     hasKey: config.hasKey !== false,
@@ -83,16 +83,34 @@ function makeGemini(config = {}) {
       if (typeof config.pickBestContact === 'function') return config.pickBestContact(params);
       if (config.pickBestContact instanceof Error) throw config.pickBestContact;
       return config.pickBestContact || null;
+    },
+    async pickBestPerson(params) {
+      calls.pickBestPerson.push(params);
+      if (typeof config.pickBestPerson === 'function') return config.pickBestPerson(params);
+      if (config.pickBestPerson instanceof Error) throw config.pickBestPerson;
+      return config.pickBestPerson || null;
     }
   };
 }
 
-function makeFinder({ apollo, hunter, options, cache, now, gemini, hunterFor, fetchSiteText }) {
+function makeFinder({
+  apollo,
+  hunter,
+  prospeo,
+  options,
+  cache,
+  now,
+  gemini,
+  hunterFor,
+  prospeoFor,
+  fetchSiteText
+}) {
   return createContactFinder({
     apollo,
-    hunter,
     gemini,
-    hunterFor,
+    // The pipeline only ever gets a per-key factory, exactly like production.
+    hunterFor: hunterFor || (hunter ? () => hunter : undefined),
+    prospeoFor: prospeoFor || (prospeo ? () => prospeo : undefined),
     fetchSiteText,
     logger: silentLogger,
     cache: cache === null ? null : cache || createTtlCache({ ttlMs: 60000 }),
@@ -108,6 +126,7 @@ test('happy path returns the four fields the frontend needs', async () => {
   const finder = makeFinder({ apollo, hunter });
 
   const result = await finder.findContact({
+    apiKey: 'user-key',
     domain: 'https://www.brand.com/pages/contact',
     brand: 'Brand'
   });
@@ -132,7 +151,7 @@ test('generic role mailboxes are marked as fallback, not as a contact', async ()
   const hunter = makeHunter({ find: { email: 'press@brand.com', score: 88 } });
   const finder = makeFinder({ apollo, hunter });
 
-  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+  const result = await finder.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
 
   assert.equal(result.is_fallback, true);
   assert.equal(result.found, false);
@@ -147,7 +166,7 @@ test('no matching person is reported without touching Hunter', async () => {
   const hunter = makeHunter();
   const finder = makeFinder({ apollo, hunter });
 
-  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+  const result = await finder.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
 
   assert.equal(result.found, false);
   assert.equal(result.reason, REASONS.NO_PERSON_FOUND);
@@ -160,7 +179,7 @@ test('an unverified email is never returned as a contact', async () => {
   const hunter = makeHunter({ verify: { status: 'unknown', result: 'unknown', score: 20 } });
   const finder = makeFinder({ apollo, hunter });
 
-  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+  const result = await finder.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
 
   assert.equal(result.found, false);
   assert.equal(result.email, null);
@@ -180,7 +199,7 @@ test('catch-all addresses are rejected by default and accepted on request', asyn
     hunter: makeHunter({ verify }),
     cache: null
   });
-  const strictResult = await strict.findContact({ domain: 'brand.com', brand: 'Brand' });
+  const strictResult = await strict.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
   assert.equal(strictResult.found, false);
   assert.equal(strictResult.reason, REASONS.EMAIL_UNVERIFIED);
 
@@ -190,7 +209,7 @@ test('catch-all addresses are rejected by default and accepted on request', asyn
     options: { allowAcceptAll: true },
     cache: null
   });
-  const relaxedResult = await relaxed.findContact({ domain: 'brand.com', brand: 'Brand' });
+  const relaxedResult = await relaxed.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
   assert.equal(relaxedResult.found, true);
   assert.equal(relaxedResult.email_status, 'accept_all');
 });
@@ -200,7 +219,7 @@ test('off-domain addresses are refused when the brand domain is required', async
   const hunter = makeHunter({ find: { email: 'jane@gmail.com', score: 90 } });
   const finder = makeFinder({ apollo, hunter });
 
-  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+  const result = await finder.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
 
   assert.equal(result.found, false);
   assert.equal(result.reason, REASONS.NO_EMAIL_FOUND);
@@ -228,7 +247,7 @@ test('a better second candidate wins over a generic first candidate', async () =
   });
   const finder = makeFinder({ apollo, hunter });
 
-  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+  const result = await finder.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
 
   assert.equal(result.found, true);
   assert.equal(result.contact_name, 'Jane Doe');
@@ -248,7 +267,7 @@ test('unknown domains fall back to a brand keyword search and drop other compani
   const hunter = makeHunter({ find: { email: 'jane@acmebikes.com', score: 90 } });
   const finder = makeFinder({ apollo, hunter });
 
-  const result = await finder.findContact({ domain: 'acmebikes.com', brand: 'Acme Bikes' });
+  const result = await finder.findContact({ apiKey: 'user-key', domain: 'acmebikes.com', brand: 'Acme Bikes' });
 
   assert.equal(apollo.calls.search.length, 2);
   assert.equal(apollo.calls.search[1].keywords, 'Acme Bikes');
@@ -275,15 +294,15 @@ test('results are cached and concurrent lookups share one run', async () => {
   const hunter = makeHunter();
   const finder = makeFinder({ apollo, hunter });
 
-  const first = finder.findContact({ domain: 'brand.com', brand: 'Brand' });
-  const second = finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+  const first = finder.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
+  const second = finder.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
   release();
   const [a, b] = await Promise.all([first, second]);
 
   assert.equal(apollo.calls, 1, 'one Apollo search for two simultaneous requests');
   assert.deepEqual(a, b);
 
-  const cached = await finder.findContact({ domain: 'https://brand.com', brand: 'Brand' });
+  const cached = await finder.findContact({ apiKey: 'user-key', domain: 'https://brand.com', brand: 'Brand' });
   assert.equal(apollo.calls, 1, 'cached lookup did not call Apollo again');
   assert.equal(cached.meta.cached, true);
 });
@@ -293,7 +312,7 @@ test('an invalid domain is rejected before any paid call', async () => {
   const finder = makeFinder({ apollo, hunter: makeHunter() });
 
   await assert.rejects(
-    () => finder.findContact({ domain: 'not a domain', brand: 'Brand' }),
+    () => finder.findContact({ apiKey: 'user-key', domain: 'not a domain', brand: 'Brand' }),
     (err) => err.status === 400 && err.code === REASONS.INVALID_DOMAIN
   );
   assert.equal(apollo.calls.search.length, 0);
@@ -325,7 +344,7 @@ test('Apollo outages fall back to the Hunter domain search', async () => {
   });
   const finder = makeFinder({ apollo, hunter });
 
-  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+  const result = await finder.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
 
   assert.equal(result.found, true);
   assert.equal(result.email, 'jane@brand.com');
@@ -346,7 +365,7 @@ test('Apollo outages still answer UPSTREAM_ERROR when Hunter cannot search domai
   };
   const finder = makeFinder({ apollo, hunter: makeHunterWithoutSearch() });
 
-  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+  const result = await finder.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
 
   assert.equal(result.found, false);
   assert.equal(result.reason, REASONS.UPSTREAM_ERROR);
@@ -378,7 +397,7 @@ test('missing Apollo credentials no longer surface as a 503', async () => {
   });
   const finder = makeFinder({ apollo, hunter });
 
-  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+  const result = await finder.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
 
   assert.equal(result.found, true);
   assert.equal(result.email, 'jane@brand.com');
@@ -397,7 +416,7 @@ test('APOLLO_KEY_MISSING is still a 503 when Hunter cannot search domains', asyn
   const finder = makeFinder({ apollo, hunter: makeHunterWithoutSearch() });
 
   await assert.rejects(
-    () => finder.findContact({ domain: 'brand.com', brand: 'Brand' }),
+    () => finder.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' }),
     (err) => err.status === 503 && err.code === 'APOLLO_KEY_MISSING'
   );
 });
@@ -419,7 +438,7 @@ test('Apollo knowing nobody hands the domain over to Hunter', async () => {
   });
   const finder = makeFinder({ apollo, hunter });
 
-  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+  const result = await finder.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
 
   assert.equal(result.found, true);
   assert.equal(result.email, 'jane@brand.com');
@@ -448,7 +467,7 @@ test('Hunter domain search only pays for a verification it does not already know
   });
   const finder = makeFinder({ apollo, hunter });
 
-  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+  const result = await finder.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
 
   assert.equal(result.found, true);
   assert.deepEqual(hunter.calls.verify, ['sam@brand.com']);
@@ -474,7 +493,7 @@ test('Hunter domain search drops off-domain addresses without verifying them', a
   });
   const finder = makeFinder({ apollo, hunter });
 
-  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+  const result = await finder.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
 
   assert.equal(result.found, false);
   assert.equal(result.reason, REASONS.NO_EMAIL_FOUND);
@@ -495,7 +514,7 @@ test('a verified role mailbox from Hunter domain search is a fallback', async ()
   });
   const finder = makeFinder({ apollo, hunter });
 
-  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+  const result = await finder.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
 
   assert.equal(result.is_fallback, true);
   assert.equal(result.found, false);
@@ -508,7 +527,7 @@ test('a valid Apollo result never spends Hunter domain search credits', async ()
   const hunter = makeHunter();
   const finder = makeFinder({ apollo, hunter });
 
-  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+  const result = await finder.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
 
   assert.equal(result.found, true);
   assert.equal(result.meta.strategy, 'apollo+hunter');
@@ -523,6 +542,7 @@ test('Gemini finds an email in the page text and no credits are spent', async ()
   const finder = makeFinder({ apollo, hunter, gemini });
 
   const result = await finder.findContact({
+    apiKey: 'user-key',
     domain: 'brand.com',
     brand: 'Brand',
     pageText: 'Sponsorships: write to sam.poe [at] brand [dot] com and we will reply quickly.'
@@ -550,7 +570,7 @@ test('without browser text the backend reads the site for Gemini', async () => {
     fetchSiteText
   });
 
-  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+  const result = await finder.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
 
   assert.equal(result.email, 'hello@brand.com');
   assert.equal(gemini.calls.findEmails[0].text, pageText);
@@ -563,6 +583,7 @@ test('a Gemini failure falls back to the normal Hunter flow', async () => {
   const finder = makeFinder({ apollo, hunter, gemini });
 
   const result = await finder.findContact({
+    apiKey: 'user-key',
     domain: 'brand.com',
     brand: 'Brand',
     pageText: 'A long enough page text so that Gemini is actually called for this brand.'
@@ -580,6 +601,7 @@ test('a role mailbox from Gemini is only used when everything else failed', asyn
   const finder = makeFinder({ apollo, hunter, gemini });
 
   const result = await finder.findContact({
+    apiKey: 'user-key',
     domain: 'brand.com',
     brand: 'Brand',
     pageText: 'Press enquiries go to press [at] brand [dot] com, influencer requests too.'
@@ -626,7 +648,7 @@ test('Gemini picks the best person out of several Hunter candidates', async () =
   });
   const finder = makeFinder({ apollo, hunter, gemini });
 
-  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+  const result = await finder.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
 
   assert.equal(result.email, 'lee@brand.com');
   assert.equal(result.contact_name, 'Lee Ann');
@@ -666,7 +688,7 @@ test('a Gemini ranking failure keeps the plain Hunter order', async () => {
   const gemini = makeGemini({ pickBestContact: new Error('model overloaded') });
   const finder = makeFinder({ apollo, hunter, gemini });
 
-  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+  const result = await finder.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
 
   assert.equal(result.found, true);
   assert.equal(result.email, 'sam@brand.com', 'best Hunter title still wins');
@@ -674,7 +696,7 @@ test('a Gemini ranking failure keeps the plain Hunter order', async () => {
 });
 
 
-test("the browser's Hunter key is used for that request only", async () => {
+test("only the browser's own Hunter key is used for that request", async () => {
   const browserCalls = { domainSearch: [] };
   const browserHunter = {
     async domainSearch(params) {
@@ -704,10 +726,8 @@ test("the browser's Hunter key is used for that request only", async () => {
       throw new AppError('Apollo down', { status: 502, code: 'APOLLO_503' });
     }
   };
-  const hunter = makeHunter();
   const finder = makeFinder({
     apollo,
-    hunter,
     hunterFor: (key) => {
       keys.push(key);
       return browserHunter;
@@ -715,19 +735,42 @@ test("the browser's Hunter key is used for that request only", async () => {
   });
 
   const result = await finder.findContact({
+    apiKey: 'user-key-123',
     domain: 'brand.com',
-    brand: 'Brand',
-    hunterApiKey: 'user-key-123'
+    brand: 'Brand'
   });
 
   assert.deepEqual(keys, ['user-key-123']);
   assert.equal(result.found, true);
   assert.equal(result.email, 'lee@brand.com');
   assert.equal(browserCalls.domainSearch.length, 1);
-  assert.equal(hunter.calls.domainSearch.length, 0, "the owner's key was not touched");
 });
 
-test('a blank browser key keeps using the server key', async () => {
+test('a request without a key is refused before any provider is called', async () => {
+  const usedKeys = [];
+  const finder = makeFinder({
+    apollo: makeApollo({ people: [] }),
+    hunter: makeHunter(),
+    hunterFor: (key) => {
+      usedKeys.push(key);
+      return makeHunter();
+    }
+  });
+
+  await assert.rejects(
+    () => finder.findContact({ domain: 'brand.com', brand: 'Brand', hunterApiKey: '   ' }),
+    (err) => {
+      assert.equal(err.status, 400);
+      assert.equal(err.code, 'API_KEY_MISSING');
+      assert.equal(err.message, 'Please add your own API key first.');
+      return true;
+    }
+  );
+  assert.deepEqual(usedKeys, [], 'no client is built without a key');
+});
+
+test("an old page's x-hunter-api-key still reaches Hunter as the user's key", async () => {
+  const usedKeys = [];
   const hunter = makeHunter({
     domainSearch: {
       emails: [
@@ -741,20 +784,21 @@ test('a blank browser key keeps using the server key', async () => {
       ]
     }
   });
-  const usedKeys = [];
   const finder = makeFinder({
-    apollo: makeApollo({ people: [] }),
-    hunter,
     hunterFor: (key) => {
       usedKeys.push(key);
       return hunter;
     }
   });
 
-  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand', hunterApiKey: '   ' });
+  const result = await finder.findContact({
+    domain: 'brand.com',
+    brand: 'Brand',
+    hunterApiKey: 'legacy-browser-key'
+  });
 
   assert.equal(result.found, true);
-  assert.deepEqual(usedKeys, [], 'no per-request client for an empty key');
+  assert.deepEqual(usedKeys, ['legacy-browser-key']);
   assert.equal(hunter.calls.domainSearch.length, 1);
 });
 
@@ -771,7 +815,7 @@ test('an exhausted Hunter plan shows the upgrade message', async () => {
   });
   const finder = makeFinder({ apollo, hunter });
 
-  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+  const result = await finder.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
 
   assert.equal(result.found, false);
   assert.equal(result.reason, REASONS.CREDIT_LIMIT);
@@ -787,9 +831,301 @@ test('a 429 while verifying also shows the upgrade message', async () => {
   });
   const finder = makeFinder({ apollo, hunter });
 
-  const result = await finder.findContact({ domain: 'brand.com', brand: 'Brand' });
+  const result = await finder.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
 
   assert.equal(result.reason, REASONS.CREDIT_LIMIT);
   assert.equal(result.message, 'API Limit Reached - Please add your own Hunter key');
+});
+
+
+/* ---------------- Prospeo.io as the second provider ---------------- */
+
+function makeProspeo(config = {}) {
+  const calls = { search: [], enrich: [] };
+  return {
+    calls,
+    async searchPeople(params) {
+      calls.search.push(params);
+      if (typeof config.search === 'function') return config.search(params);
+      return config.search || [];
+    },
+    async enrichPerson(params) {
+      calls.enrich.push(params);
+      if (typeof config.enrich === 'function') return config.enrich(params);
+      return config.enrich || null;
+    }
+  };
+}
+
+function prospeoPerson(overrides = {}) {
+  return {
+    personId: 'pid1',
+    firstName: 'Jane',
+    lastName: 'Doe',
+    fullName: 'Jane Doe',
+    title: 'Influencer Marketing Manager',
+    linkedinUrl: 'https://www.linkedin.com/in/jane-doe-4a7c21',
+    email: null,
+    emailStatus: 'unknown',
+    ...overrides
+  };
+}
+
+test('provider=prospeo searches people, enriches one and returns the email', async () => {
+  const prospeo = makeProspeo({
+    search: [
+      prospeoPerson({ personId: 'pid2', fullName: 'Sam Lee', title: 'Support Engineer' }),
+      prospeoPerson({ personId: 'pid1' })
+    ],
+    enrich: (params) =>
+      params.personId === 'pid1'
+        ? prospeoPerson({ email: 'jane@brand.com', emailStatus: 'valid', verificationMethod: 'SMTP' })
+        : null
+  });
+  const hunter = makeHunter();
+  const finder = makeFinder({ prospeo, hunter });
+
+  const result = await finder.findContact({
+    apiKey: 'prospeo-key',
+    provider: 'prospeo',
+    domain: 'brand.com',
+    brand: 'Brand'
+  });
+
+  assert.equal(result.found, true);
+  assert.equal(result.email, 'jane@brand.com');
+  assert.equal(result.email_status, 'valid');
+  assert.equal(result.contact_name, 'Jane Doe');
+  assert.equal(result.linkedin_url, 'https://www.linkedin.com/in/jane-doe-4a7c21');
+  assert.equal(result.meta.strategy, 'prospeo-search+enrich');
+  assert.equal(result.meta.provider, 'prospeo');
+  assert.match(result.message, /Prospeo/);
+
+  // The best title is enriched first, and Hunter is never touched.
+  assert.deepEqual(prospeo.calls.search[0], { domain: 'brand.com' });
+  assert.equal(prospeo.calls.enrich[0].personId, 'pid1');
+  assert.equal(prospeo.calls.enrich[0].domain, 'brand.com');
+  assert.equal(hunter.calls.domainSearch.length, 0);
+});
+
+test('prospeo falls back to a brand name search when the domain is unknown', async () => {
+  const prospeo = makeProspeo({
+    search: (params) => (params.brand === 'Brand' ? [prospeoPerson()] : []),
+    enrich: prospeoPerson({ email: 'jane@brand.com', emailStatus: 'valid' })
+  });
+  const finder = makeFinder({ prospeo });
+
+  const result = await finder.findContact({
+    apiKey: 'prospeo-key',
+    provider: 'prospeo',
+    domain: 'brand.com',
+    brand: 'Brand'
+  });
+
+  assert.equal(result.found, true);
+  assert.equal(result.meta.searched_by, 'name');
+  assert.deepEqual(prospeo.calls.search[1], { brand: 'Brand' });
+});
+
+test('prospeo unverified addresses are reported, not returned as contacts', async () => {
+  const prospeo = makeProspeo({
+    search: [prospeoPerson()],
+    enrich: prospeoPerson({ email: 'jane@brand.com', emailStatus: 'unknown' })
+  });
+  const finder = makeFinder({ prospeo });
+
+  const result = await finder.findContact({
+    apiKey: 'prospeo-key',
+    provider: 'prospeo',
+    domain: 'brand.com'
+  });
+
+  assert.equal(result.found, false);
+  assert.equal(result.email, null);
+  assert.equal(result.reason, REASONS.EMAIL_UNVERIFIED);
+  assert.equal(result.email_status, 'unknown');
+});
+
+test('prospeo role mailboxes become a fallback, not a contact', async () => {
+  const prospeo = makeProspeo({
+    search: [prospeoPerson()],
+    enrich: prospeoPerson({ email: 'press@brand.com', emailStatus: 'valid' })
+  });
+  const finder = makeFinder({ prospeo });
+
+  const result = await finder.findContact({
+    apiKey: 'prospeo-key',
+    provider: 'prospeo',
+    domain: 'brand.com'
+  });
+
+  assert.equal(result.found, false);
+  assert.equal(result.is_fallback, true);
+  assert.equal(result.reason, REASONS.GENERIC_EMAIL);
+  assert.equal(result.email, 'press@brand.com');
+});
+
+
+test('prospeo off-domain addresses are dropped without being returned', async () => {
+  const prospeo = makeProspeo({
+    search: [prospeoPerson()],
+    enrich: prospeoPerson({ email: 'jane@other.com', emailStatus: 'valid' })
+  });
+  const finder = makeFinder({ prospeo });
+
+  const result = await finder.findContact({
+    apiKey: 'prospeo-key',
+    provider: 'prospeo',
+    domain: 'brand.com'
+  });
+
+  assert.equal(result.found, false);
+  assert.equal(result.email, null);
+  assert.ok(result.meta.rejected.some((entry) => entry.reason === 'off_domain'));
+});
+
+test('prospeo only pays for a limited number of enrichments', async () => {
+  const people = [];
+  for (let i = 0; i < 6; i += 1) {
+    people.push(prospeoPerson({ personId: `pid${i}`, fullName: `Person ${i}` }));
+  }
+  const prospeo = makeProspeo({ search: people, enrich: () => null });
+  const finder = makeFinder({ prospeo });
+
+  const result = await finder.findContact({
+    apiKey: 'prospeo-key',
+    provider: 'prospeo',
+    domain: 'brand.com'
+  });
+
+  assert.equal(result.found, false);
+  assert.equal(result.reason, REASONS.NO_EMAIL_FOUND);
+  assert.equal(prospeo.calls.enrich.length, 2, 'maxEmailsToVerify enrichments at most');
+});
+
+test('prospeo knowing nobody is a clean NO_PERSON_FOUND', async () => {
+  const prospeo = makeProspeo({ search: [] });
+  const finder = makeFinder({ prospeo });
+
+  const result = await finder.findContact({
+    apiKey: 'prospeo-key',
+    provider: 'prospeo',
+    domain: 'brand.com',
+    brand: 'Brand'
+  });
+
+  assert.equal(result.reason, REASONS.NO_PERSON_FOUND);
+  assert.equal(result.meta.candidates, 0);
+});
+
+test('an exhausted Prospeo plan names Prospeo in the upgrade message', async () => {
+  const prospeo = makeProspeo({
+    search: () => {
+      throw new UpstreamError('Prospeo', 402, 'Prospeo has no credits left for this API key.');
+    }
+  });
+  const finder = makeFinder({ prospeo });
+
+  const result = await finder.findContact({
+    apiKey: 'prospeo-key',
+    provider: 'prospeo',
+    domain: 'brand.com'
+  });
+
+  assert.equal(result.reason, REASONS.CREDIT_LIMIT);
+  assert.equal(result.message, 'API Limit Reached - Please add your own Prospeo key');
+});
+
+
+test('Gemini picks which Prospeo person to enrich first', async () => {
+  const prospeo = makeProspeo({
+    search: [
+      prospeoPerson({ personId: 'pid1', fullName: 'Jane Doe' }),
+      prospeoPerson({ personId: 'pid2', fullName: 'Sam Poe', title: 'Partnerships Manager' })
+    ],
+    enrich: (params) =>
+      params.personId === 'pid2'
+        ? prospeoPerson({
+            personId: 'pid2',
+            fullName: 'Sam Poe',
+            title: 'Partnerships Manager',
+            email: 'sam@brand.com',
+            emailStatus: 'valid'
+          })
+        : null
+  });
+  const gemini = makeGemini({ pickBestPerson: { index: 1, reason: 'owns partnerships' } });
+  const finder = makeFinder({ prospeo, gemini });
+
+  const result = await finder.findContact({
+    apiKey: 'prospeo-key',
+    provider: 'prospeo',
+    domain: 'brand.com',
+    brand: 'Brand'
+  });
+
+  assert.equal(result.found, true);
+  assert.equal(result.email, 'sam@brand.com');
+  assert.equal(result.meta.gemini_pick, 'Sam Poe');
+  assert.equal(gemini.calls.pickBestPerson.length, 1);
+  assert.equal(gemini.calls.pickBestPerson[0].candidates[1].contact_name, 'Sam Poe');
+  assert.equal(prospeo.calls.enrich[0].personId, 'pid2');
+});
+
+test('Gemini still reads the page text first for the Prospeo provider', async () => {
+  const prospeo = makeProspeo({ search: [], enrich: () => null });
+  const gemini = makeGemini({ findEmails: { emails: ['sam.poe@brand.com'], raw: '' } });
+  const finder = makeFinder({ prospeo, gemini });
+
+  const result = await finder.findContact({
+    apiKey: 'prospeo-key',
+    provider: 'prospeo',
+    domain: 'brand.com',
+    brand: 'Brand',
+    pageText: 'Sponsorships: write to sam.poe@brand.com for creator campaigns.'
+  });
+
+  assert.equal(result.found, true);
+  assert.equal(result.email, 'sam.poe@brand.com');
+  assert.equal(result.email_source, 'gemini');
+  assert.match(result.message, /no Prospeo credits were used/);
+  assert.equal(prospeo.calls.search.length, 0, 'no Prospeo credit was spent');
+});
+
+test('hunter and prospeo answers are cached separately', async () => {
+  const hunter = makeHunter({
+    domainSearch: {
+      emails: [
+        {
+          email: 'jane@brand.com',
+          firstName: 'Jane',
+          lastName: 'Doe',
+          position: 'Influencer Marketing Manager',
+          verification: { status: 'valid' }
+        }
+      ]
+    }
+  });
+  const prospeo = makeProspeo({
+    search: [prospeoPerson()],
+    enrich: prospeoPerson({ email: 'lee@brand.com', emailStatus: 'valid' })
+  });
+  const cache = createTtlCache({ ttlMs: 60000 });
+  const finder = makeFinder({ hunter, prospeo, cache });
+
+  const first = await finder.findContact({
+    apiKey: 'user-key',
+    provider: 'hunter',
+    domain: 'brand.com'
+  });
+  const second = await finder.findContact({
+    apiKey: 'prospeo-key',
+    provider: 'prospeo',
+    domain: 'brand.com'
+  });
+
+  assert.equal(first.email, 'jane@brand.com');
+  assert.equal(second.email, 'lee@brand.com');
+  assert.equal(second.meta.cached, undefined);
 });
 

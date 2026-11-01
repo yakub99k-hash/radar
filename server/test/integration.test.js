@@ -15,6 +15,9 @@ const { buildServices } = require('../src/index');
 const { createApp } = require('../src/app');
 const { silentLogger } = require('../src/logger');
 
+/** What index.html now sends: the chosen provider + the visitor's own key. */
+const USER_HEADERS = { 'x-provider': 'hunter', 'x-api-key': 'user-hunter-key' };
+
 function startMockUpstream(state) {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
@@ -84,6 +87,46 @@ function startMockUpstream(state) {
           }
         });
       }
+      if (url.pathname === '/search-person') {
+        return send(200, {
+          error: false,
+          free: false,
+          results: state.prospeoPeople || [
+            {
+              person_id: 'pid1',
+              first_name: 'Lee',
+              last_name: 'Ann',
+              full_name: 'Lee Ann',
+              current_job_title: 'Partnerships Manager',
+              linkedin_url: 'https://www.linkedin.com/in/lee-ann-1a2b3c',
+              email: { status: 'UNAVAILABLE', revealed: false, email: null }
+            }
+          ],
+          pagination: { current_page: 1, total_page: 1, total_count: 1 }
+        });
+      }
+      if (url.pathname === '/enrich-person') {
+        return send(200, {
+          error: false,
+          free_enrichment: false,
+          person: {
+            person_id: 'pid1',
+            first_name: 'Lee',
+            last_name: 'Ann',
+            full_name: 'Lee Ann',
+            current_job_title: 'Partnerships Manager',
+            linkedin_url: 'https://www.linkedin.com/in/lee-ann-1a2b3c',
+            email: {
+              status: 'VERIFIED',
+              revealed: true,
+              email: 'lee.ann@brand.com',
+              verification_method: 'SMTP',
+              email_mx_provider: 'Google'
+            }
+          },
+          company: { name: 'Brand', website: 'brand.com' }
+        });
+      }
       if (url.pathname === '/v2/email-finder') {
         return send(200, {
           data: { email: 'jane@brand.com', score: 96, position: 'Influencer Marketing Manager' }
@@ -132,10 +175,11 @@ async function boot(state, overrides = {}, servicesOptions = {}) {
   const upstream = await startMockUpstream(state);
   const config = buildConfig({
     APOLLO_API_KEY: 'apollo-test-key',
-    HUNTER_API_KEY: 'hunter-test-key',
     APOLLO_BASE_URL: `${upstream.baseUrl}/api/v1`,
     HUNTER_BASE_URL: upstream.baseUrl,
+    PROSPEO_BASE_URL: upstream.baseUrl,
     ALLOWED_ORIGINS: 'https://radar.yaqubu.com',
+    CONTACT_USE_APOLLO: 'true',
     HTTP_RETRIES: '0',
     HUNTER_POLL_DELAY_MS: '250',
     ...overrides
@@ -163,7 +207,7 @@ test('pipeline runs Apollo -> Hunter end to end over HTTP', async () => {
 
   try {
     const res = await fetch(`${server.url}/api/brand-contact?domain=brand.com&brand=Brand`, {
-      headers: { Origin: 'https://radar.yaqubu.com' }
+      headers: { Origin: 'https://radar.yaqubu.com', ...USER_HEADERS }
     });
     const body = await res.json();
 
@@ -186,7 +230,7 @@ test('pipeline runs Apollo -> Hunter end to end over HTTP', async () => {
     assert.equal(match.body.id, 'p1');
 
     const finder = state.requests.find((r) => r.path === '/v2/email-finder');
-    assert.equal(finder.headers['x-api-key'], 'hunter-test-key');
+    assert.equal(finder.headers['x-api-key'], 'user-hunter-key');
     assert.equal(finder.query.linkedin_handle, 'jane-doe-4a7c21');
 
     const verifier = state.requests.find((r) => r.path === '/v2/email-verifier');
@@ -202,14 +246,14 @@ test('an unverifiable email produces a graceful, cacheable answer', async () => 
 
   try {
     const url = `${server.url}/api/brand-contact?domain=brand.com&brand=Brand`;
-    const first = await (await fetch(url)).json();
+    const first = await (await fetch(url, { headers: USER_HEADERS })).json();
     assert.equal(first.found, false);
     assert.equal(first.email, null);
     assert.equal(first.reason, 'EMAIL_UNVERIFIED');
     assert.equal(first.email_status, 'invalid');
 
     const callsBefore = state.requests.length;
-    const second = await (await fetch(url)).json();
+    const second = await (await fetch(url, { headers: USER_HEADERS })).json();
     assert.equal(second.reason, 'EMAIL_UNVERIFIED');
     assert.equal(second.meta.cached, true);
     assert.equal(state.requests.length, callsBefore, 'cached response spent no credits');
@@ -229,7 +273,7 @@ test('a rejected Apollo key still answers through the Hunter domain search over 
 
   try {
     const res = await fetch(`${server.url}/api/brand-contact?domain=brand.com&brand=Brand`, {
-      headers: { Origin: 'https://radar.yaqubu.com' }
+      headers: { Origin: 'https://radar.yaqubu.com', ...USER_HEADERS }
     });
     const body = await res.json();
 
@@ -246,7 +290,7 @@ test('a rejected Apollo key still answers through the Hunter domain search over 
     const search = state.requests.find((r) => r.path === '/v2/domain-search');
     assert.ok(search, 'Hunter domain search was called');
     assert.equal(search.query.domain, 'brand.com');
-    assert.equal(search.headers['x-api-key'], 'hunter-test-key');
+    assert.equal(search.headers['x-api-key'], 'user-hunter-key');
     assert.equal(search.query.api_key, undefined, 'the key stays out of the URL');
 
     // Domain search already said "valid", so no paid verifier call was made.
@@ -276,7 +320,7 @@ test('Gemini finds a hidden email over HTTP before any paid call', async () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-hunter-api-key': 'browser-key-123',
+        ...USER_HEADERS,
         Origin: 'https://radar.yaqubu.com'
       },
       body: JSON.stringify({
@@ -303,7 +347,9 @@ test('the pipeline still answers when Gemini is not configured', async () => {
   const { server, close } = await boot(state);
 
   try {
-    const res = await fetch(`${server.url}/api/brand-contact?domain=brand.com&brand=Brand`);
+    const res = await fetch(`${server.url}/api/brand-contact?domain=brand.com&brand=Brand`, {
+      headers: USER_HEADERS
+    });
     const body = await res.json();
     assert.equal(res.status, 200);
     assert.equal(body.found, true);
@@ -314,3 +360,74 @@ test('the pipeline still answers when Gemini is not configured', async () => {
   }
 });
 
+
+test('a Prospeo lookup runs search-person -> enrich-person over HTTP', async () => {
+  const state = { requests: [], verification: { status: 'valid', result: 'deliverable' } };
+  const { server, close } = await boot(state);
+
+  try {
+    const res = await fetch(`${server.url}/api/brand-contact?domain=brand.com&brand=Brand`, {
+      headers: { Origin: 'https://radar.yaqubu.com', 'x-provider': 'prospeo', 'x-api-key': 'user-prospeo-key' }
+    });
+    const body = await res.json();
+
+    assert.equal(res.status, 200);
+    assert.equal(body.found, true);
+    assert.equal(body.email, 'lee.ann@brand.com');
+    assert.equal(body.email_status, 'valid');
+    assert.equal(body.contact_name, 'Lee Ann');
+    assert.equal(body.title, 'Partnerships Manager');
+    assert.equal(body.meta.strategy, 'prospeo-search+enrich');
+
+    const search = state.requests.find((r) => r.path === '/search-person');
+    assert.ok(search, 'Prospeo search was called');
+    assert.equal(search.headers['x-key'], 'user-prospeo-key');
+    assert.deepEqual(search.body.filters.company.websites.include, ['brand.com']);
+
+    const enrich = state.requests.find((r) => r.path === '/enrich-person');
+    assert.ok(enrich, 'Prospeo enrich was called');
+    assert.equal(enrich.body.data.person_id, 'pid1');
+    assert.equal(enrich.headers['x-key'], 'user-prospeo-key');
+    assert.equal(enrich.body.enrich_mobile, false);
+
+    assert.equal(state.requests.filter((r) => r.path.startsWith('/v2/')).length, 0, 'no Hunter credit was spent');
+    assert.equal(state.requests.filter((r) => r.path.startsWith('/api/v1/')).length, 0, 'no Apollo credit was spent');
+  } finally {
+    await close();
+  }
+});
+
+test('without a key the API answers 400 and no upstream is called', async () => {
+  const state = { requests: [], verification: { status: 'valid', result: 'deliverable' } };
+  const { server, close } = await boot(state);
+
+  try {
+    const res = await fetch(`${server.url}/api/brand-contact?domain=brand.com&brand=Brand`);
+    const body = await res.json();
+
+    assert.equal(res.status, 400);
+    assert.equal(body.code, 'API_KEY_MISSING');
+    assert.equal(body.error, 'Please add your own API key first.');
+    assert.equal(state.requests.length, 0, 'no provider was called');
+  } finally {
+    await close();
+  }
+});
+
+test('Apollo stays off unless the owner opts in', async () => {
+  const state = { requests: [], verification: { status: 'valid', result: 'deliverable' } };
+  const { server, close } = await boot(state, { CONTACT_USE_APOLLO: 'false' });
+
+  try {
+    const res = await fetch(`${server.url}/api/brand-contact?domain=brand.com&brand=Brand`, {
+      headers: USER_HEADERS
+    });
+    const body = await res.json();
+
+    assert.equal(res.status, 200);
+    assert.equal(body.meta.strategy, 'hunter-domain-search');
+    assert.equal(state.requests.filter((r) => r.path.startsWith('/api/v1/')).length, 0);
+  } finally {
+    await close();
+  }
+});
