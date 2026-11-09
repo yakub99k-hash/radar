@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Creator Finder</title>
+<style>
+  :root {
+    --bg: #0b0c10;
+    --card: #111318;
+    --card2: #0f1115;
+    --line: #27272a;
+    --text: #f4f4f5;
+    --muted: #a1a1aa;
+    --accent: #6366f1;
+    --accent-hover: #4f46e5;
+    --ok: #6ee7b7;
+    --bad: #fca5a5;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 720px; margin: 0 auto; padding: 36px 16px 100px; }
+  header { margin-bottom: 4px; }
+  h1 { font-size: clamp(1.7rem, 5vw, 2.4rem); letter-spacing: -0.02em; margin: 0 0 4px; }
+  .tag {
+    display: inline-block;
+    font-size: 0.75rem;
+    padding: 2px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--muted);
+    margin-top: 8px;
+  }
+  .sub { color: var(--muted); margin: 0 0 26px; font-size: 0.95rem; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 22px;
+    margin-bottom: 14px;
+  }
+  h2 {
+    font-size: 0.85rem;
+    margin: 0 0 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+  .fields { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .range { grid-template-columns: 1fr 1fr; }
+  @media (max-width: 559px) { .range { grid-template-columns: 1fr; } }
+  .field { margin-bottom: 0; }
+  .field label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  .field input {
+    width: 100%;
+    background: #0c0e13;
+    border: 1px solid #374151;
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-size: 1rem;
+  }
+  .field input:focus { outline: none; border-color: var(--accent); }
+  .field input::placeholder { color: #6b7280; }
+  .row-actions { display: flex; gap: 10px; margin-top: 6px; }
+  button {
+    border: none;
+    border-radius: 10px;
+    padding: 11px 18px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: #fff;
+    background: var(--accent);
+  }
+  button:hover { background: var(--accent-hover); }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+  button.secondary { background: #1f2937; color: var(--text); }
+  button.secondary:hover { background: #374151; }
+  .keybar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .pill {
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .pill.ok { border-color: var(--ok); color: var(--ok); }
+  .pill.bad { border-color: var(--bad); color: var(--bad); }
+  .hint { color: var(--muted); font-size: 0.8rem; margin-top: 6px; }
+  .results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .count { color: var(--muted); font-size: 0.85rem; }
+  .list { display: flex; flex-direction: column; gap: 10px; }
+  .creator {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--card2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 14px;
+  }
+  .creator .meta { flex: 1; }
+  .creator .name { font-weight: 600; font-size: 1rem; color: var(--text); }
+  .creator .subs { color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
+  .creator a {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 4px 10px;
+    white-space: nowrap;
+  }
+  .creator a:hover { background: var(--accent); color: #fff; }
+  .empty {
+    color: var(--muted);
+    font-size: 0.95rem;
+    padding: 26px;
+    text-align: center;
+    border: 1px dashed var(--line);
+    border-radius: 12px;
+    background: var(--card2);
+    display: none;
+  }
+  .error {
+    background: #4a0e0e;
+    border: 1px solid #7f1d1d;
+    color: var(--bad);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 0.9rem;
+    margin-bottom: 14px;
+    display: none;
+  }
+  .loading {
+    display: none;
+    text-align: center;
+    padding: 26px;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  .spinner {
+    width: 22px;
+    height: 22px;
+    border: 3px solid rgba(99, 102, 241, 0.25);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  footer { color: var(--muted); font-size: 0.78rem; margin-top: 10px; }
+  a.link { color: var(--accent); text-decoration: underline; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Creator Finder</h1>
+    <p class="sub">Find YouTube creators by niche keyword and subscriber range.</p>
+    <span class="tag">YouTube Data API v3</span>
+  </header>
+
+  <div class="card">
+    <h2>1. YouTube Data API Key</h2>
+    <div class="keybar">
+      <input type="text" id="apiKey" placeholder="Paste your YouTube Data API key" autocomplete="off">
+      <span id="apiKeyStatus" class="pill bad">No key saved yet</span>
+    </div>
+    <p class="hint">Your key is saved only in this browser (localStorage) and sent in the request header; it is never stored on the server.</p>
+  </div>
+
+  <div class="card">
+    <h2>2. Search</h2>
+    <div class="fields range">
+      <div class="field">
+        <label>Keyword</label>
+        <input type="text" id="keyword" placeholder="e.g. ebike review" autocomplete="off">
+      </div>
+    </div>
+    <div class="fields range" style="margin-top: 8px;">
+      <div class="field">
+        <label>Min Subscribers</label>
+        <input type="number" id="minSubs" placeholder="10000" min="0" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Max Subscribers</label>
+        <input type="number" id="maxSubs" placeholder="50000" min="0" autocomplete="off">
+      </div>
+    </div>
+    <div class="row-actions">
+      <button id="searchBtn">Search Creators</button>
+      <button type="button" class="secondary" id="clearBtn">Clear Results</button>
+    </div>
+  </div>
+
+  <div class="error" id="errorBox"></div>
+  <div class="loading" id="loadingBox">
+    <div class="spinner"></div>
+    <div>Searching YouTube&hellip;</div>
+  </div>
+
+  <div class="results-header">
+    <h2 id="resultsTitle">Results</h2>
+    <span class="count" id="resultsCount"></span>
+  </div>
+  <div class="list" id="resultsList"></div>
+  <div class="empty" id="emptyBox">No creators found in that range. Try a different keyword or adjust the subscriber range.</div>
+
+  <footer>
+    Built with the YouTube Data API v3. Results are based on the most recent videos matching your keyword.
+  </footer>
+</main>
+
+<script>
+(function () {
+  const apiKeyInput = document.getElementById('apiKey');
+  const apiKeyStatus = document.getElementById('apiKeyStatus');
+  const keywordInput = document.getElementById('keyword');
+  const minInput = document.getElementById('minSubs');
+  const maxInput = document.getElementById('maxSubs');
+  const searchBtn = document.getElementById('searchBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const errorBox = document.getElementById('errorBox');
+  const loadingBox = document.getElementById('loadingBox');
+  const resultsList = document.getElementById('resultsList');
+  const emptyBox = document.getElementById('emptyBox');
+  const resultsCount = document.getElementById('resultsCount');
+  const resultsTitle = document.getElementById('resultsTitle');
+
+  const API_KEY_STORAGE = 'creatorFinderApiKey';
+
+  // Prefill API key from localStorage.
+  const savedKey = localStorage.getItem(API_KEY_STORAGE) || '';
+  if (savedKey) apiKeyInput.value = savedKey;
+  updateKeyStatus(savedKey);
+
+  apiKeyInput.addEventListener('input', () => {
+    const val = apiKeyInput.value.trim();
+    localStorage.setItem(API_KEY_STORAGE, val);
+    updateKeyStatus(val);
+  });
+
+  function updateKeyStatus(val) {
+    if (val) {
+      apiKeyStatus.textContent = 'Key saved on this device';
+      apiKeyStatus.className = 'pill ok';
+    } else {
+      apiKeyStatus.textContent = 'No key saved yet';
+      apiKeyStatus.className = 'pill bad';
+    }
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text === null || text === undefined ? '' : String(text);
+    return div.innerHTML;
+  }
+
+  function formatNumber(value) {
+    return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  function setLoading(loading) {
+    searchBtn.disabled = loading;
+    loadingBox.style.display = loading ? 'block' : 'none';
+    errorBox.style.display = 'none';
+    resultsList.style.display = loading ? 'none' : 'block';
+    emptyBox.style.display = 'none';
+  }
+
+  function showError(message) {
+    errorBox.textContent = message;
+    errorBox.style.display = 'block';
+    resultsList.style.display = 'none';
+    emptyBox.style.display = 'none';
+  }
+
+  function showResults(creators) {
+    errorBox.style.display = 'none';
+    resultsList.innerHTML = '';
+    resultsList.style.display = 'block';
+
+    if (!creators || creators.length === 0) {
+      emptyBox.style.display = 'block';
+      resultsTitle.textContent = 'Results';
+      resultsCount.textContent = '';
+      return;
+    }
+
+    resultsTitle.textContent = 'Results';
+    resultsCount.textContent = '(' + creators.length + ' creator' + (creators.length !== 1 ? 's' : '') + ')';
+
+    for (const c of creators) {
+      const el = document.createElement('div');
+      el.className = 'creator';
+      el.innerHTML =
+        '<div class="meta">' +
+        '<div class="name">' + escapeHtml(c.channelName) + '</div>' +
+        '<div class="subs">' + formatNumber(c.subscriberCount) + ' subscribers</div>' +
+        '</div>' +
+        '<a href="' + escapeHtml(c.url) + '" target="_blank" rel="noopener">Open channel</a>';
+      resultsList.appendChild(el);
+    }
+  }
+
+  searchBtn.addEventListener('click', async () => {
+    const apiKey = apiKeyInput.value.trim();
+    const keyword = keywordInput.value.trim();
+    const minRaw = minInput.value.trim();
+    const maxRaw = maxInput.value.trim();
+
+    if (!apiKey) {
+      showError('Please add your YouTube Data API key first.');
+      apiKeyInput.focus();
+      return;
+    }
+    if (!keyword) {
+      showError('Please enter a keyword.');
+      keywordInput.focus();
+      return;
+    }
+    if (minRaw === '' || maxRaw === '') {
+      showError('Please enter both a minimum and maximum subscriber count.');
+      (minRaw === '' ? minInput : maxInput).focus();
+      return;
+    }
+    const minN = Number(minRaw);
+    const maxN = Number(maxRaw);
+    if (!Number.isFinite(minN) || !Number.isFinite(maxN) || minN < 0 || maxN < 0) {
+      showError('Subscriber counts must be zero or greater.');
+      return;
+    }
+    if (minN > maxN) {
+      showError('Minimum subscribers cannot be greater than maximum.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch('/api/find-creators', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey
+        },
+        body: JSON.stringify({
+          keyword: keyword,
+          minSubs: minN,
+          maxSubs: maxN
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        showError(data && data.error ? data.error : 'Request failed.');
+        return;
+      }
+
+      showResults(data && data.creators);
+    } catch (err) {
+      showError('Unable to reach the server. Check your network connection and try again.');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  });
+
+  clearBtn.addEventListener('click', () => {
+    resultsList.innerHTML = '';
+    resultsList.style.display = 'none';
+    emptyBox.style.display = 'none';
+    errorBox.style.display = 'none';
+    resultsCount.textContent = '';
+    resultsTitle.textContent = 'Results';
+  });
+})();
+</script>
+</body>
+</html>
