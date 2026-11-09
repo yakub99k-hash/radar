@@ -28,7 +28,54 @@
     -webkit-font-smoothing: antialiased;
   }
   main { max-width: 720px; margin: 0 auto; padding: 36px 16px 100px; }
-  header { margin-bottom: 4px; }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 4px;
+    flex-wrap: wrap;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .logo {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: var(--card2);
+    border: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .logo svg {
+    width: 22px;
+    height: 22px;
+    color: var(--accent);
+  }
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 6px 12px;
+    background: var(--card2);
+    white-space: nowrap;
+  }
+  .back-link:hover {
+    border-color: var(--accent);
+    color: var(--accent-hover);
+    background: #161b22;
+  }
   h1 { font-size: clamp(1.7rem, 5vw, 2.4rem); letter-spacing: -0.02em; margin: 0 0 4px; }
   .tag {
     display: inline-block;
@@ -179,9 +226,19 @@
 <body>
 <main>
   <header>
-    <h1>Creator Finder</h1>
-    <p class="sub">Find YouTube creators by niche keyword and subscriber range.</p>
-    <span class="tag">YouTube Data API v3</span>
+    <div class="brand">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+        </svg>
+      </div>
+      <div>
+        <h1>Creator Finder</h1>
+        <p class="sub">Find YouTube creators by niche keyword and subscriber range.</p>
+        <span class="tag">YouTube Data API v3</span>
+      </div>
+    </div>
+    <a href="index.html" class="back-link" aria-label="Back to Radar">Back to Radar</a>
   </header>
 
   <div class="card">
