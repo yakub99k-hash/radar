@@ -1,0 +1,17 @@
+{
+  "name": "creator-finder",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Find YouTube creators by niche keyword and subscriber range using the YouTube Data API v3",
+  "main": "server/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

@@ -2,367 +2,404 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Yaqubu Radar</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA4MCA4MCIgeG1sbnM6YzJwYT0iaHR0cDovL2MycGEub3JnL21hbmlmZXN0Ij48bWV0YWRhdGE+PGMycGE6bWFuaWZlc3Q+QUFBV2dtcDFiV0lBQUFBZWFuVnRaR015Y0dFQUVRQVFnQUFBcWdBNG0zRURZekp3WVFBQUFCWmNhblZ0WWdBQUFFZHFkVzFrWXpKdFlRQVJBQkNBQUFDcUFEaWJjUU4xY200Nll6SndZVHBoWkdObU5qVTVNeTAzT1RVeUxUUXlORFF0WVRjek1TMDBaR0U1TUdRek9EaGhNV1VBQUFBRGwycDFiV0lBQUFBcGFuVnRaR015WVhNQUVRQVFnQUFBcWdBNG0zRURZekp3WVM1aGMzTmxjblJwYjI1ekFBQUFBTHhxZFcxaUFBQUFSR3AxYldSalltOXlBQkVBRUlBQUFLb0FPSnR4RTJNeWNHRXVhVzVuY21Wa2FXVnVkQzUyTXdBQUFBQVlZekp6YUZNSjd0NStVOHVnUWJsVjFwZkhsNm9BQUFCd1kySnZjcU5wWkdNNlptOXliV0YwYldsdFlXZGxMM04yWnl0NGJXeHFhVzV6ZEdGdVkyVkpSSGdzZUcxd09tbHBaRG8wWldVMFpHRmlNeTFsTlRjMUxUUmxPV1V0T1Rkak9DMDBaVEUxWW1ZME0yUTFOV05zY21Wc1lYUnBiMjV6YUdsd2FIQmhjbVZ1ZEU5bUFBQUI0bXAxYldJQUFBQkJhblZ0WkdOaWIzSUFFUUFRZ0FBQXFnQTRtM0VUWXpKd1lTNWhZM1JwYjI1ekxuWXlBQUFBQUJoak1uTm84QlBYVzFBS0RkYmFzdzEvenNjZXBRQUFBWmxqWW05eW9tZGhZM1JwYjI1emdxSm1ZV04wYVc5dWEyTXljR0V1YjNCbGJtVmthbkJoY21GdFpYUmxjbk9oYTJsdVozSmxaR2xsYm5SemdhSmpkWEpzZUMxelpXeG1JMnAxYldKbVBXTXljR0V1WVhOelpYSjBhVzl1Y3k5ak1uQmhMbWx1WjNKbFpHbGxiblF1ZGpOa2FHRnphRmdnR2xGL0lDTTdVaTVpTTZFRWVuTHFMa2hIVk9hSkx0S0NINnVDQWVmRHZBeWtabUZqZEdsdmJuZ2RZMjl0TG1GdWRHaHliM0JwWXk1amJHRjFaR1V1Y0hKdmRtbGtaV1JxY0dGeVlXMWxkR1Z5YzZGNEgyTnZiUzVoYm5Sb2NtOXdhV011YjNKcFoybHVMV052Ym1acFpHVnVZMlZuZFc1cmJtOTNibXRrWlhOamNtbHdkR2x2Ym5obVEyeGhkV1JsSUhCeWIzWnBaR1ZrSUhSb2FYTWdabWxzWlNCaGRDQjBhR1VnY21WeGRXVnpkQ0J2WmlCaElIVnpaWElnWVc1a0lHMWhlU0JvWVhabElHTnlaV0YwWldRZ2IzSWdiVzlrYVdacFpXUWdkR2hsSUdacGJHVWdZMjl1ZEdWdWRITXViWE52Wm5SM1lYSmxRV2RsYm5TaFpHNWhiV1ZtUTJ4aGRXUmxjbUZzYkVGamRHbHZibk5KYm1Oc2RXUmxaUFVBQUFESWFuVnRZZ0FBQUVCcWRXMWtZMkp2Y2dBUkFCQ0FBQUNxQURpYmNSTmpNbkJoTG1oaGMyZ3VaR0YwWVFBQUFBQVlZekp6YUhMdXlFWUNiUkU4YWVVbkY2ZW5zTHdBQUFDQVkySnZjcVZqWVd4blpuTm9ZVEkxTm1Od1lXUk5BQUFBQUFBQUFBQUFBQUFBQUdSb1lYTm9XQ0FBZ1NMMUFyZmZKdmNqNFJiZUhjcUhXckdIT1BlR3VPcUszd3ozbFEzK2hHUnVZVzFsYm1wMWJXSm1JRzFoYm1sbVpYTjBhbVY0WTJ4MWMybHZibk9Cb21WemRHRnlkQmg3Wm14bGJtZDBhQmtlQkFBQUFqNXFkVzFpQUFBQUoycDFiV1JqTW1Oc0FCRUFFSUFBQUtvQU9KdHhBMk15Y0dFdVkyeGhhVzB1ZGpJQUFBQUNEMk5pYjNLbFkyRnNaMlp6YUdFeU5UWnBjMmxuYm1GMGRYSmxlRTF6Wld4bUkycDFiV0ptUFM5ak1uQmhMM1Z5Ympwak1uQmhPbUZrWTJZMk5Ua3pMVGM1TlRJdE5ESTBOQzFoTnpNeExUUmtZVGt3WkRNNE9HRXhaUzlqTW5CaExuTnBaMjVoZEhWeVpXcHBibk4wWVc1alpVbEVlQ3g0YlhBNmFXbGtPalZqTlRCa1kyRTBMVEkwTkRZdE5HTTBOQzA1TURZNExXTmtZVGt4WW1ObE4yRXlaWEpqY21WaGRHVmtYMkZ6YzJWeWRHbHZibk9Eb21OMWNteDRMWE5sYkdZamFuVnRZbVk5WXpKd1lTNWhjM05sY25ScGIyNXpMMk15Y0dFdWFXNW5jbVZrYVdWdWRDNTJNMlJvWVhOb1dDQWFVWDhnSXp0U0xtSXpvUVI2Y3VvdVNFZFU1b2t1MG9JZnE0SUI1OE84REtKamRYSnNlQ3B6Wld4bUkycDFiV0ptUFdNeWNHRXVZWE56WlhKMGFXOXVjeTlqTW5CaExtRmpkR2x2Ym5NdWRqSmthR0Z6YUZnZ0cza1ExRTVLS3Bvd1BzSGVxeHBDVC85SGRFcUhKWGJabUp6T09NRnNrNkNpWTNWeWJIZ3BjMlZzWmlOcWRXMWlaajFqTW5CaExtRnpjMlZ5ZEdsdmJuTXZZekp3WVM1b1lYTm9MbVJoZEdGa2FHRnphRmdnNXlHV2ROREtBV2d4aVgvNjFtV3ZqMlZLMkZXUkpCWVAzVTErQnN2MGp0OTBZMnhoYVcxZloyVnVaWEpoZEc5eVgybHVabStqWkc1aGJXVnZRVzUwYUhKdmNHbGpJRVpwYkdWelozWmxjbk5wYjI1bE1TNHdMakJyYzNCbFkxWmxjbk5wYjI1bE1pNDBMakFBQUJBNGFuVnRZZ0FBQUNocWRXMWtZekpqY3dBUkFCQ0FBQUNxQURpYmNRTmpNbkJoTG5OcFoyNWhkSFZ5WlFBQUFCQUlZMkp2Y3RLRVdRSVNvZ0VtR0NGWkFnb3dnZ0lHTUlJQmphQURBZ0VDQWhSQTVhQUs3c0k1MEw2NGcvb0dRZ1U5WjFVVEFEQUtCZ2dxaGtqT1BRUURBekJKTVJjd0ZRWURWUVFLRXc1QmJuUm9jbTl3YVdNc0lGQkNRekV1TUN3R0ExVUVBeE1sUVc1MGFISnZjR2xqSUVOdmJuUmxiblFnUTNKbFpHVnVkR2xoYkhNZ1VtOXZkQ0JEUVRBZUZ3MHlOakE0TURjeE9EUXpOVFphRncweU9EQTRNRFl4T1RRek5UWmFNRVF4RnpBVkJnTlZCQW9URGtGdWRHaHliM0JwWXl3Z1VFSkRNU2t3SndZRFZRUURFeUJCYm5Sb2NtOXdhV01nUTJ4aGRXUmxJRU52Ym5SbGJuUWdVMmxuYm1sdVp6QlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJKaDZDbXZMVUJnRkZOVTB2VUtsT1Z0RTZkamQxN0w1U3V3WDBMZW1GaXNCTTNka2QvM2N5anhGQTNRbzVTNDZmWDAvaWhZMFZaN21mYjlLRjcwM3Q1T2pXREJXTUE0R0ExVWREd0VCL3dRRUF3SUhnREFWQmdOVkhTVUVEakFNQmdvckJnRUVBWVBvWGdJQk1Bd0dBMVVkRXdFQi93UUNNQUF3SHdZRFZSMGpCQmd3Rm9BVXpsSGlCSUZPWkZzaitPUEV6NW8rbk1IWFhNSXdDZ1lJS29aSXpqMEVBd01EWndBd1pBSXdNWE1kRko0QmV0TExWWTdPUnVFOW5vcWJiQVpPWm4vYUFyWHlUd0ZBWmZLclB6eEYydlBvSk5mMStVQ2RnMVhHQWpCd1gxemQ5V0dxWWtxbUw1U0ZxdzFReVNqcjF6SmZwSk05KzFyZER3U1BMTU9QT2pLdWlYam9VL3BVVWVHOVJ3bWhZM0JoWkZrTm5nQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBUFpZUU1CQnJ0ODc2N2hpeHV3bktiaS9oZjM3aUNnOWdyUUhONEovd3ZNQzJzMlVmV2lqM2wxWGEvamh2QmhUL1ErRVI1SVFBazRXVFB3UG9INmhNYmExLzA4PTwvYzJwYTptYW5pZmVzdD48L21ldGFkYXRhPjxkZWZzPjxsaW5lYXJHcmFkaWVudCBpZD0iTEciIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiMyREQ0QkYiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMwRjc2NkUiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iODAiIGhlaWdodD0iODAiIHJ4PSIyMCIgZmlsbD0idXJsKCNMRykiLz48Y2lyY2xlIGN4PSI0MiIgY3k9IjQyIiByPSIyMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjUiLz48cGF0aCBkPSJNNDcgMjIgMzEgNDVoMTBsLTQgMTcgMTktMjZINDZ6IiBmaWxsPSIjZmZmIi8+PHBhdGggZD0iTTggMzBoMTNNNCA0MmgxNU0xMCA1NGgxMSIgc3Ryb2tlPSIjOTlGNkU0IiBzdHJva2Utd2lkdGg9IjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPg==">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Creator Finder</title>
 <style>
-:root{--bg:#000;--card:#18181b;--card2:#09090b;--ln:#27272a;--tx:#f4f4f5;--mu:#a1a1aa;--pr:#fff;--on:#000;--ok:#6ee7b7;--warn:#fcd34d;--bad:#fca5a5}
-@media(prefers-color-scheme:light){:root{--bg:#fff;--card:#f4f4f5;--card2:#fff;--ln:#e4e4e7;--tx:#18181b;--mu:#52525b;--pr:#18181b;--on:#fff;--ok:#047857;--warn:#b45309;--bad:#b91c1c}}
-*{box-sizing:border-box}html,body{margin:0}
-body{background:var(--bg);color:var(--tx);font-family:Inter,system-ui,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.5;min-height:100vh}
-main{max-width:1180px;margin:0 auto;padding:28px 16px 70px}
-h1{font-size:clamp(1.7rem,4vw,2.3rem);letter-spacing:-.03em;margin:0}
-.sub{color:var(--mu);margin:4px 0 14px}
-.banner{display:inline-block;border:1px solid var(--ln);background:var(--card);border-radius:8px;padding:6px 12px;font-size:.8rem;color:var(--mu)}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:22px 0}
-.card{background:var(--card);border:1px solid var(--ln);border-radius:14px;padding:18px;margin-bottom:14px}
-.stat{margin:0}.stat b{display:block;font-size:1.9rem;letter-spacing:-.02em}.stat span{color:var(--mu);font-size:.85rem}
-h2{font-size:.95rem;margin:0 0 4px}
-.hint{color:var(--mu);font-size:.8rem;margin:0 0 12px}
-.drop{border:1px dashed var(--ln);background:var(--card2);border-radius:12px;padding:22px 12px;text-align:center;cursor:pointer;color:var(--mu);font-size:.9rem}
-.drop.on{border-color:var(--pr)}
-.thumbs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
-.thumbs div{position:relative}.thumbs img{height:64px;border-radius:8px;border:1px solid var(--ln);display:block}
-.thumbs button{position:absolute;top:-7px;right:-7px;width:20px;height:20px;border-radius:50%;border:0;background:var(--tx);color:var(--bg);cursor:pointer;font-size:12px}
-label{display:block;font-weight:600;font-size:.82rem;margin:12px 0 5px}
-input,textarea,select{width:100%;padding:9px 11px;border:1px solid var(--ln);border-radius:9px;background:var(--card2);color:var(--tx);font:inherit;font-size:.88rem}
-textarea{min-height:70px;resize:vertical}
-.btn{padding:9px 16px;border-radius:8px;border:1px solid var(--pr);background:var(--pr);color:var(--on);font:inherit;font-size:.85rem;font-weight:600;cursor:pointer}
-.btn.g{background:transparent;color:var(--tx);border-color:var(--ln)}.btn:disabled{opacity:.5;cursor:wait}
-.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0}
-.bar input{flex:1;min-width:160px}.bar select{width:auto}
-#msg{color:var(--mu);font-size:.88rem;margin:8px 0;min-height:1.2em}
-.cand{display:grid;grid-template-columns:24px minmax(140px,220px) 1fr;gap:10px;align-items:start;padding:8px 0;border-bottom:1px solid var(--ln);font-size:.85rem}
-.cand input[type=checkbox]{width:auto;margin-top:8px}.cand small{color:var(--mu)}
-details{margin-top:10px;font-size:.8rem;color:var(--mu)}pre{white-space:pre-wrap;max-height:180px;overflow:auto;background:var(--card2);padding:10px;border-radius:8px}
-.wrap{overflow-x:auto;border:1px solid var(--ln);border-radius:14px;background:var(--card)}
-table{border-collapse:collapse;width:100%;min-width:860px;font-size:.86rem}
-th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--ln);vertical-align:top}
-th{font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mu);font-weight:600}
-tr:last-child td{border-bottom:0}
-td small{display:block;color:var(--mu);font-size:.75rem;margin-top:2px}
-.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:.7rem;font-weight:700;border:1px solid var(--warn);color:var(--warn);margin-top:4px}
-td input{min-width:200px;font-family:ui-monospace,monospace;font-size:.78rem}td input.bad{border-color:var(--bad)}td select{min-width:100px}
-.act{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-.act a,.act button{font-size:.75rem;padding:5px 10px;border-radius:7px;border:1px solid var(--ln);background:transparent;color:var(--tx);text-decoration:none;cursor:pointer}
-.act .off{opacity:.4;pointer-events:none}
-.empty{padding:40px;text-align:center;color:var(--mu)}
-.note{color:var(--mu);font-size:.78rem;margin-top:18px}
-.auth{max-width:420px;margin:8vh auto;padding:0 16px}.auth .card{padding:24px}.auth h2{font-size:1.2rem;margin-bottom:6px}
-.auth .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.auth .link{background:none;border:0;color:var(--mu);text-decoration:underline;cursor:pointer;font:inherit;font-size:.82rem;padding:6px 0}
-#amsg{margin:12px 0 0;font-size:.86rem;color:var(--warn);min-height:1.2em}.user{display:flex;gap:10px;align-items:center;justify-content:flex-end;color:var(--mu);font-size:.8rem;margin-bottom:10px}
-@media(max-width:640px){.stats{grid-template-columns:1fr}.cand{grid-template-columns:24px 1fr}.cand div:last-child{grid-column:2}}
-.brand{display:flex;align-items:center;gap:12px}.brand .lg{width:44px;height:44px;border-radius:12px;flex:none}.brand h1{margin:0}
-
-.scanrow{display:flex;gap:8px;flex-wrap:wrap}.scanrow input{flex:1;min-width:220px}
-.prog{height:10px;background:var(--card2);border:1px solid var(--ln);border-radius:99px;overflow:hidden;margin-top:12px}.prog div{height:100%;width:0;background:var(--pr);transition:width .3s}
-.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px}
-.bc{background:var(--card);border:1px solid var(--ln);border-radius:14px;padding:16px}.bc h3{margin:0;font-size:1.05rem}.bc small{color:var(--mu)}
-.chip{display:inline-block;padding:1px 8px;border:1px solid var(--ln);border-radius:99px;font-size:.72rem;margin:4px 4px 0 0}
-.blk{margin-top:12px;padding-top:10px;border-top:1px solid var(--ln);font-size:.84rem}.blk b{display:block;font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--mu);margin-bottom:3px}
-.blk code{font-size:.8rem;word-break:break-all}.guess{color:var(--warn);font-size:.72rem}.good{color:var(--ok)}
-.bc .act{margin-top:12px}.bc input.dm{margin-top:8px}.legal{color:var(--mu);font-size:.74rem;margin-top:20px}.legal a{color:var(--mu)}
-.blk small{display:block;margin-top:2px}</style>
+  :root {
+    --bg: #0b0c10;
+    --card: #111318;
+    --card2: #0f1115;
+    --line: #27272a;
+    --text: #f4f4f5;
+    --muted: #a1a1aa;
+    --accent: #6366f1;
+    --accent-hover: #4f46e5;
+    --ok: #6ee7b7;
+    --bad: #fca5a5;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 720px; margin: 0 auto; padding: 36px 16px 100px; }
+  header { margin-bottom: 4px; }
+  h1 { font-size: clamp(1.7rem, 5vw, 2.4rem); letter-spacing: -0.02em; margin: 0 0 4px; }
+  .tag {
+    display: inline-block;
+    font-size: 0.75rem;
+    padding: 2px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--muted);
+    margin-top: 8px;
+  }
+  .sub { color: var(--muted); margin: 0 0 26px; font-size: 0.95rem; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 22px;
+    margin-bottom: 14px;
+  }
+  h2 {
+    font-size: 0.85rem;
+    margin: 0 0 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+  .fields { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .range { grid-template-columns: 1fr 1fr; }
+  @media (max-width: 559px) { .range { grid-template-columns: 1fr; } }
+  .field { margin-bottom: 0; }
+  .field label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  .field input {
+    width: 100%;
+    background: #0c0e13;
+    border: 1px solid #374151;
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-size: 1rem;
+  }
+  .field input:focus { outline: none; border-color: var(--accent); }
+  .field input::placeholder { color: #6b7280; }
+  .row-actions { display: flex; gap: 10px; margin-top: 6px; }
+  button {
+    border: none;
+    border-radius: 10px;
+    padding: 11px 18px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: #fff;
+    background: var(--accent);
+  }
+  button:hover { background: var(--accent-hover); }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+  button.secondary { background: #1f2937; color: var(--text); }
+  button.secondary:hover { background: #374151; }
+  .keybar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .pill {
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .pill.ok { border-color: var(--ok); color: var(--ok); }
+  .pill.bad { border-color: var(--bad); color: var(--bad); }
+  .hint { color: var(--muted); font-size: 0.8rem; margin-top: 6px; }
+  .results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .count { color: var(--muted); font-size: 0.85rem; }
+  .list { display: flex; flex-direction: column; gap: 10px; }
+  .creator {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--card2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 14px;
+  }
+  .creator .meta { flex: 1; }
+  .creator .name { font-weight: 600; font-size: 1rem; color: var(--text); }
+  .creator .subs { color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
+  .creator a {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 4px 10px;
+    white-space: nowrap;
+  }
+  .creator a:hover { background: var(--accent); color: #fff; }
+  .empty {
+    color: var(--muted);
+    font-size: 0.95rem;
+    padding: 26px;
+    text-align: center;
+    border: 1px dashed var(--line);
+    border-radius: 12px;
+    background: var(--card2);
+    display: none;
+  }
+  .error {
+    background: #4a0e0e;
+    border: 1px solid #7f1d1d;
+    color: var(--bad);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 0.9rem;
+    margin-bottom: 14px;
+    display: none;
+  }
+  .loading {
+    display: none;
+    text-align: center;
+    padding: 26px;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  .spinner {
+    width: 22px;
+    height: 22px;
+    border: 3px solid rgba(99, 102, 241, 0.25);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  footer { color: var(--muted); font-size: 0.78rem; margin-top: 10px; }
+  a.link { color: var(--accent); text-decoration: underline; }
+</style>
 </head>
 <body>
-<section class="auth" id="auth">
-<div class="card">
-<div class="brand"><svg class="lg" viewBox="0 0 80 80" aria-hidden="true"><defs><linearGradient id="LG1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2DD4BF"/><stop offset="1" stop-color="#0F766E"/></linearGradient></defs><rect width="80" height="80" rx="20" fill="url(#LG1)"/><circle cx="42" cy="42" r="20" fill="none" stroke="#fff" stroke-width="5"/><path d="M47 22 31 45h10l-4 17 19-26H46z" fill="#fff"/><path d="M8 30h13M4 42h15M10 54h11" stroke="#99F6E4" stroke-width="4" stroke-linecap="round"/></svg><h1 style="font-size:1.6rem">Yaqubu Radar</h1></div>
-<p class="sub" style="margin-bottom:16px">Sign in to use the tool. Accounts are free.</p>
-<div id="aform">
-<label for="em">Email</label><input id="em" type="email" autocomplete="email">
-<label for="pw">Password (at least 6 characters)</label><input id="pw" type="password" autocomplete="current-password">
-<div class="row"><button class="btn" id="bIn">Sign in</button><button class="btn g" id="bUp">Create account</button></div>
-<button class="link" id="bReset">Forgot password?</button>
-</div>
-<div id="verify" hidden>
-<p>We sent a verification link to <b id="vmail"></b>. Open it, then come back and press the button below. Check spam if you do not see it.</p>
-<div class="row"><button class="btn" id="bCheck">I verified my email</button><button class="btn g" id="bResend">Send again</button><button class="btn g" id="bOut2">Sign out</button></div>
-</div>
-<p id="amsg" role="status"></p>
-</div>
-</section>
+<main>
+  <header>
+    <h1>Creator Finder</h1>
+    <p class="sub">Find YouTube creators by niche keyword and subscriber range.</p>
+    <span class="tag">YouTube Data API v3</span>
+  </header>
 
-<main id="appMain" hidden>
-<div class="user"><span id="who"></span><button class="btn g" id="bOut" style="padding:5px 12px">Sign out</button></div>
-<div class="brand"><svg class="lg" viewBox="0 0 80 80" aria-hidden="true"><defs><linearGradient id="LG2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2DD4BF"/><stop offset="1" stop-color="#0F766E"/></linearGradient></defs><rect width="80" height="80" rx="20" fill="url(#LG2)"/><circle cx="42" cy="42" r="20" fill="none" stroke="#fff" stroke-width="5"/><path d="M47 22 31 45h10l-4 17 19-26H46z" fill="#fff"/><path d="M8 30h13M4 42h15M10 54h11" stroke="#99F6E4" stroke-width="4" stroke-linecap="round"/></svg><h1>Yaqubu Radar</h1></div>
-<p class="sub">Scan a YouTube channel (up to 2000 videos) and collect the brands that sponsor it.</p>
-<div class="stats">
-<div class="card stat"><b id="sB">0</b><span>Total Brands</span></div>
-<div class="card stat"><b id="sC">0</b><span>Total Channels</span></div>
-<div class="card stat"><b id="sE">0</b><span>Contacts Found</span></div>
-</div>
-<div class="card">
-<h2>1. Your free YouTube API key</h2>
-<p class="hint">Each person uses their own free key, so nobody shares limits. It is saved on this device only. <span id="ytst"></span></p>
-<div class="scanrow"><input id="ytk" type="password" placeholder="Paste your YouTube Data API key" autocomplete="off"><button class="btn g" id="ytSave">Save key</button></div>
-<details><summary>How to get a free key (about 10 minutes)</summary><ol style="margin:8px 0 0;padding-left:18px;color:var(--mu);font-size:.84rem">
-<li>Go to console.cloud.google.com and sign in. Create a project, name it anything.</li>
-<li>Open APIs &amp; Services, then Library. Search "YouTube Data API v3" and click Enable.</li>
-<li>Open Credentials, then Create credentials, then API key. Copy it.</li>
-<li>Click the key, under API restrictions choose YouTube Data API v3 only, and save.</li>
-<li>Paste the key above and press Save key. Never post it publicly.</li></ol></details>
-</div>
-<div class="card">
-<h2>2. Your Hunter.io API key</h2>
-<p class="hint">Each person uses their own free key, so nobody shares limits. It is saved on this device only. <span id="hukst"></span></p>
-<div class="scanrow"><input id="huk" type="password" placeholder="Paste your Hunter.io API key" autocomplete="off"><button class="btn g" id="hukSave">Save key</button></div>
-<details><summary>How to get a free Hunter API key</summary><ol style="margin:8px 0 0;padding-left:18px;color:var(--mu);font-size:.84rem">
-<li>Go to hunter.io and sign up (the free plan includes a monthly search allowance).</li>
-<li>Open the Dashboard, then the API section in the left sidebar, and copy your API key.</li>
-<li>Paste the key above and press Save key. Never post it publicly.</li>
-<li>Clear the box and press Save key to forget it on this device.</li></ol></details>
-</div>
-<div class="card">
-<h2>3. Your Prospeo.io API key</h2>
-<p class="hint">Each person uses their own free key, so nobody shares limits. It is saved on this device only. <span id="prst"></span></p>
-<div class="scanrow"><input id="prk" type="password" placeholder="Paste your Prospeo.io API key" autocomplete="off"><button class="btn g" id="prSave">Save key</button></div>
-<details><summary>How to get a free Prospeo API key</summary><ol style="margin:8px 0 0;padding-left:18px;color:var(--mu);font-size:.84rem">
-<li>Go to prospeo.io and sign up (the free plan includes monthly credits).</li>
-<li>Open the dashboard, then the API section, and copy your API key.</li>
-<li>Paste the key above and press Save key. Never post it publicly.</li>
-<li>Clear the box and press Save key to forget it on this device.</li></ol></details>
-</div>
-<div class="card">
-<h2>4. Which email finder to use</h2>
-<p class="hint">Pick the service your searches should use. Your own key for that service is used, and the choice is saved on this device only.</p>
-<select id="prov" aria-label="Email finder provider" style="max-width:320px">
-<option value="hunter">Hunter</option>
-<option value="prospeo">Prospeo</option>
-</select>
-<p class="hint" id="provst" style="margin-top:8px"></p>
-</div>
-<div class="card">
-<h2>5. Scan a channel</h2>
-<p class="hint">Reads video descriptions for sponsors, codes and links. A channel with 1 video scans 1, one with 500 scans 500, and anything above 2000 scans the newest 2000.</p>
-<div class="scanrow"><input id="ch" placeholder="Paste YouTube Channel @handle or URL"><button class="btn" id="scanBtn">SCAN</button></div>
-<div class="prog" id="prog" hidden><div id="fill"></div></div><div id="ptxt" class="hint" style="margin-top:6px"></div>
-<div id="msg" role="status"></div>
-</div>
-<div class="bar"><input id="q" placeholder="Search brand or channel..."><button class="btn g" id="all">Find contacts for all</button><button class="btn g" id="ask">Copy contact request for Claude</button><button class="btn g" id="csv">Download CSV</button><button class="btn g" id="wipe">Clear all</button></div>
-<div class="cards" id="cards"></div><div class="empty" id="empty">No brands yet. Paste a channel above and press SCAN.</div>
-<p class="legal">Emails are shown only when they are printed on the brand's own website, and the page is named under each one. Some sites hide their emails, so "not found" is possible. If a brand has no partnership or marketing address, the support address is shown instead. Uses YouTube API Services: <a href="https://www.youtube.com/t/terms" target="_blank" rel="noreferrer">YouTube Terms</a> and <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">Google Privacy Policy</a>.</p>
+  <div class="card">
+    <h2>1. YouTube Data API Key</h2>
+    <div class="keybar">
+      <input type="text" id="apiKey" placeholder="Paste your YouTube Data API key" autocomplete="off">
+      <span id="apiKeyStatus" class="pill bad">No key saved yet</span>
+    </div>
+    <p class="hint">Your key is saved only in this browser (localStorage) and sent in the request header; it is never stored on the server.</p>
+  </div>
+
+  <div class="card">
+    <h2>2. Search</h2>
+    <div class="fields range">
+      <div class="field">
+        <label>Keyword</label>
+        <input type="text" id="keyword" placeholder="e.g. ebike review" autocomplete="off">
+      </div>
+    </div>
+    <div class="fields range" style="margin-top: 8px;">
+      <div class="field">
+        <label>Min Subscribers</label>
+        <input type="number" id="minSubs" placeholder="10000" min="0" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Max Subscribers</label>
+        <input type="number" id="maxSubs" placeholder="50000" min="0" autocomplete="off">
+      </div>
+    </div>
+    <div class="row-actions">
+      <button id="searchBtn">Search Creators</button>
+      <button type="button" class="secondary" id="clearBtn">Clear Results</button>
+    </div>
+  </div>
+
+  <div class="error" id="errorBox"></div>
+  <div class="loading" id="loadingBox">
+    <div class="spinner"></div>
+    <div>Searching YouTube&hellip;</div>
+  </div>
+
+  <div class="results-header">
+    <h2 id="resultsTitle">Results</h2>
+    <span class="count" id="resultsCount"></span>
+  </div>
+  <div class="list" id="resultsList"></div>
+  <div class="empty" id="emptyBox">No creators found in that range. Try a different keyword or adjust the subscriber range.</div>
+
+  <footer>
+    Built with the YouTube Data API v3. Results are based on the most recent videos matching your keyword.
+  </footer>
 </main>
 
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script>
+(function () {
+  const apiKeyInput = document.getElementById('apiKey');
+  const apiKeyStatus = document.getElementById('apiKeyStatus');
+  const keywordInput = document.getElementById('keyword');
+  const minInput = document.getElementById('minSubs');
+  const maxInput = document.getElementById('maxSubs');
+  const searchBtn = document.getElementById('searchBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const errorBox = document.getElementById('errorBox');
+  const loadingBox = document.getElementById('loadingBox');
+  const resultsList = document.getElementById('resultsList');
+  const emptyBox = document.getElementById('emptyBox');
+  const resultsCount = document.getElementById('resultsCount');
+  const resultsTitle = document.getElementById('resultsTitle');
 
-var CONTACT_API="https://radar-contacts.yakub99k.workers.dev/";
-/* Contact finder service (the "server" folder in this repo). When the brand
-   website prints no email, this finds a named contact with the visitor's own
-   Hunter or Prospeo key (sent in the x-provider / x-api-key headers).
-   Paste the deployed URL here: either the service root
-   ("https://your-service.onrender.com") or the full endpoint
-   ("https://your-service.onrender.com/api/brand-contact") both work.
-   Leave it empty to skip the automatic step. */
-var CONTACT_FALLBACK_API="https://radar-backend-kuw7.onrender.com/api/brand-contact";
-var S={rows:[],known:""},KEY="yqr:v2",YT="https://www.googleapis.com/youtube/v3",MAXV=2000;
-function $(i){return document.getElementById(i)}
-function msg(t){$("msg").textContent=t||""}
-function norm(s){return String(s||"").toLowerCase().replace(/[^a-z0-9]/g,"")}
-function load(){try{var t=localStorage.getItem(KEY);if(t)S=JSON.parse(t)}catch(e){}}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
-function okEmail(e){return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e||"")}
-function mk(tag,txt,cls){var e=document.createElement(tag);if(txt!=null)e.textContent=txt;if(cls)e.className=cls;return e}
-function ytKey(){try{return localStorage.getItem("yqr:ytkey")||""}catch(e){return ""}}
-/* Each visitor can bring their own Hunter.io or Prospeo.io key; a key is sent
-   with the request only, and only to the provider they picked. */
-function hunterKey(){try{return localStorage.getItem("yqr:hunterkey")||""}catch(e){return ""}}
-function prospeoKey(){try{return localStorage.getItem("yqr:prospeokey")||""}catch(e){return ""}}
-/* Which finder the visitor wants: "hunter" (default) or "prospeo". */
-function providerChoice(){try{var v=localStorage.getItem("yqr:provider");return v==="prospeo"?"prospeo":"hunter"}catch(e){return "hunter"}}
-function keyFor(p){return p==="prospeo"?prospeoKey():hunterKey()}
-function labelFor(p){return p==="prospeo"?"Prospeo":"Hunter"}
-function hukStatus(){var t=$("hukst");if(t)t.textContent=hunterKey()?"Your key is saved on this device.":"No key saved yet."}
-function prStatus(){var t=$("prst");if(t)t.textContent=prospeoKey()?"Your key is saved on this device.":"No key saved yet."}
-function provStatus(){
-  var p=providerChoice(),has=!!keyFor(p),t=$("provst");
-  if(t)t.textContent=has?"Using "+labelFor(p)+" with your own key.":"Using "+labelFor(p)+". Save your "+labelFor(p)+" key above before searching.";
-  $("prov").value=p;
-}
-$("hukSave").onclick=function(){try{var v=$("huk").value.trim();if(v)localStorage.setItem("yqr:hunterkey",v);else localStorage.removeItem("yqr:hunterkey")}catch(e){}$("huk").value="";hukStatus();provStatus()};
-$("prSave").onclick=function(){try{var v=$("prk").value.trim();if(v)localStorage.setItem("yqr:prospeokey",v);else localStorage.removeItem("yqr:prospeokey")}catch(e){}$("prk").value="";prStatus();provStatus()};
-$("prov").onchange=function(){try{localStorage.setItem("yqr:provider",$("prov").value==="prospeo"?"prospeo":"hunter")}catch(e){}provStatus()};
-$("ytSave").onclick=function(){try{localStorage.setItem("yqr:ytkey",$("ytk").value.trim())}catch(e){}$("ytk").value="";$("ytst").textContent=ytKey()?"Key saved on this device.":"No key saved."};
-function yt(path,p){var k=ytKey();if(!k)return Promise.reject(new Error("Save your YouTube API key in the box above first."));p.key=k;
-  return fetch(YT+"/"+path+"?"+new URLSearchParams(p)).then(function(r){return r.json().then(function(j){if(!r.ok){var e=j.error||{},m=e.message||"",why=e.errors&&e.errors[0]&&e.errors[0].reason;
-    throw new Error(why==="quotaExceeded"?"Your YouTube allowance for today is used up. Try again tomorrow.":why==="keyInvalid"?"That YouTube key is not valid.":/referer|referrer/i.test(m)?"That key is restricted to a different website address.":"YouTube said no: "+(m||r.status))}return j})})}
-function parseChannel(s){s=String(s||"").trim();var m;
-  if((m=s.match(/UC[\w-]{22}/)))return{id:m[0]};if((m=s.match(/youtube\.com\/user\/([\w.-]+)/i)))return{forUsername:m[1]};
-  if((m=s.match(/@([\w.\-]+)/)))return{forHandle:"@"+m[1]};if(/^[\w.\-]{3,40}$/.test(s))return{forHandle:"@"+s};
-  throw new Error("Use a channel @handle or a youtube.com/@handle link.")}
-/* ---- sponsor detection ---- */
-var TRIG=/(sponsored by|thanks to|thank you to|brought to you by|partnered with|partner|sponsor|use code|discount code|promo code|affiliate|#ad\b)/i,
-AFTER=/(?:sponsored by|thanks to|thank you to|brought to you by|partnered with|partnership with)\s*:?\s*([A-Z0-9][\w&'.\- ]{1,40})/i,
-CODE=/\b[Cc][Oo][Dd][Ee]:?\s*["'\u201c]?([A-Z0-9][A-Z0-9_-]{2,19})\b/,
-SKIP=/(youtube|youtu\.be|instagram|tiktok|facebook|twitter|^x\.com|linktr|discord|patreon|amzn|amazon|bit\.ly|geni\.us|ko-fi|paypal|google|spotify|apple|reddit|twitch|snapchat|threads|whatsapp|t\.me|gmail|shopify|wikipedia|goo\.gl|ow\.ly|tinyurl|shorturl|lnk\.)/i,
-STOP=/^(my|our|the|you|all|everyone|everybody|this|these|those|a|an|us|them|watching|supporting)$/i;
-var SLD=/^(co|com|org|net|gov|edu|ac)\.[a-z]{2}$/;
-function regRoot(h){var p=String(h||"").split(".");if(p.length<=2)return h;var l2=p.slice(-2).join(".");return SLD.test(l2)&&p.length>=3?p.slice(-3).join("."):l2}
-function hostOf(t){var out=[],a=t.match(/https?:\/\/[^\s)>\]]+/gi)||[],b=t.match(/\b[a-z0-9-]{2,}\.(?:com|net|org|co|io|shop|store|bike|bikes|us|uk|de|eu|ca|au|tv|me|cc)\b/gi)||[];
-  a.forEach(function(u){try{out.push(new URL(u).hostname.replace(/^www\./,"").toLowerCase())}catch(e){}});b.forEach(function(x){out.push(x.toLowerCase().replace(/^www\./,""))});
-  return regRoot(out.filter(function(h){return !SKIP.test(h)})[0]||"")}
-function cleanName(s){var n=s.split(/[\n,;:|()\-\u2013\u2014]|\s(?:for|at|on|and|with|use|code|who|their|so|is|are)\s/i)[0].trim().split(/\s+/).slice(0,3).join(" ").replace(/[.!?]+$/,"");return n.length>=3&&!STOP.test(n)?n:""}
-function labelOf(h){var l=regRoot(h).split(".")[0];return l.charAt(0).toUpperCase()+l.slice(1)}
-function detect(v){var lines=String(v.snippet.description||"").split(/\r?\n/),seen={},out=[];
-  lines.forEach(function(line,i){if(!TRIG.test(line))return;var ctx=line+" "+(lines[i+1]||""),dom=hostOf(ctx),cm=line.match(CODE)||ctx.match(CODE),am=line.match(AFTER),brand=am?cleanName(am[1]):"";
-    if(!brand&&dom)brand=labelOf(dom);var key=norm(brand);if(!brand||key.length<3||seen[key])return;seen[key]=1;
-    out.push({brand:brand,domain:dom,code:cm?cm[1]:"",video:{url:"https://www.youtube.com/watch?v="+v.id,title:v.snippet.title,date:(v.snippet.publishedAt||"").slice(0,10)}})});return out}
-function merge(dets0,ch){var dets=[];dets0.forEach(function(d){var p=d.brand.split(/\s+(?:&|and)\s+/i);p.forEach(function(b){dets.push({brand:b.trim(),domain:p.length>1?"":d.domain,code:d.code,video:d.video})})});dets.forEach(function(d){var n=norm(d.brand);if(n.length<3)return;var r=S.rows.filter(function(x){return norm(x.brand)===n})[0];
- if(!r){r={id:Date.now()+Math.random(),brand:d.brand,domain:"",channels:[],codes:[],videos:[],count:0,email:"",cname:"",status:"New"};S.rows.push(r)}
- if(!r.domain&&d.domain)r.domain=d.domain;if(r.channels.indexOf(ch)<0)r.channels.push(ch);if(d.code&&r.codes.indexOf(d.code)<0)r.codes.push(d.code);
- if(!r.videos.some(function(v){return v.url===d.video.url})){r.count++;if(r.videos.length<10)r.videos.push(d.video)}})}
-function bar(c,t){$("fill").style.width=(t?Math.min(100,Math.round(c/t*100)):100)+"%";$("ptxt").textContent="Scanning "+c+"/"+t+" videos..."}
-/* ---- scan: 1 video scans 1, 500 scans 500, 5000 scans the newest 2000 ---- */
-$("scanBtn").onclick=function(){
-  var v=$("ch").value.trim(),p;if(!v){msg("Paste a channel @handle or URL first.");return}
-  try{p=parseChannel(v)}catch(e){msg(e.message);return}
-  var b=$("scanBtn");b.disabled=true;$("prog").hidden=false;msg("");bar(0,0);var got=0,title="",target=0;
-  yt("channels",Object.assign({part:"snippet,contentDetails,statistics"},p)).then(function(c){
-    if(!c.items||!c.items.length)throw new Error("Channel not found.");
-    var it=c.items[0],up=it.contentDetails.relatedPlaylists.uploads;title=it.snippet.title;target=Math.min(MAXV,parseInt(it.statistics.videoCount,10)||0);bar(0,target);
-    function page(tok){if(got>=target)return Promise.resolve();var q={part:"contentDetails",playlistId:up,maxResults:50};if(tok)q.pageToken=tok;
-      return yt("playlistItems",q).then(function(r){var ids=(r.items||[]).map(function(x){return x.contentDetails.videoId}).slice(0,target-got);if(!ids.length)return;
-        return yt("videos",{part:"snippet",id:ids.join(",")}).then(function(vv){(vv.items||[]).forEach(function(x){merge(detect(x),title)});got+=ids.length;save();draw();bar(got,target);return r.nextPageToken?page(r.nextPageToken):null})})}
-    return page("")
-  }).then(function(){bar(got,got);$("ptxt").textContent="Scanned "+got+" video"+(got===1?"":"s")+" from "+title+".";msg(got?"":"That channel has no public videos.")}).catch(function(e){msg(e.message)}).then(function(){b.disabled=false})};
-/* ---- contacts: real emails found on the brand's own website ---- */
-function mx(d){return fetch("https://dns.google/resolve?name="+encodeURIComponent(d)+"&type=MX").then(function(r){return r.json()}).then(function(j){return !!(j.Answer&&j.Answer.length)}).catch(function(){return false})}
-function cleanDom(s){s=String(s||"").toLowerCase().replace(/^https?:\/\//,"").replace(/^www\./,"").split("/")[0];return /^[a-z0-9.-]+\.[a-z]{2,}$/.test(s)?s:""}
-function liUrl(r){return "https://www.linkedin.com/search/results/people/?keywords="+encodeURIComponent(r.brand+" Partnerships Manager")}
-/* Any page text the website scraper returned, so the backend can hand it to the
-   AI step instead of downloading the site again. Returns "" when absent. */
-function scrapedText(f){
-  if(!f)return "";
-  var parts=[],push=function(v){if(typeof v==="string"&&v.trim())parts.push(v)};
-  push(f.text);push(f.pageText);push(f.page_text);push(f.snippet);push(f.content);
-  if(Array.isArray(f.pages))f.pages.forEach(function(p){if(p&&typeof p==="object"){push(p.text);push(p.content)}else push(p)});
-  return parts.join("\n").slice(0,40000);
-}
-/* Asks the backend (Gemini + the finder the visitor picked) for a named contact. */
-function autoContact(dom,brand,text){
-  if(!CONTACT_FALLBACK_API)return Promise.resolve(null);
-  /* Every search uses the visitor's own key, so ask for one before calling out. */
-  var provider=providerChoice(),apiKey=keyFor(provider);
-  if(!apiKey)return Promise.resolve({found:false,reason:"API_KEY_MISSING",message:"Please add your own API key first. Save your "+labelFor(provider)+" key in the box above (or pick the other finder and save that key)."});
-  /* Tolerate a trailing slash, a "/api" suffix, or the full endpoint path. */
-  var root=CONTACT_FALLBACK_API.trim().replace(/\/+$/,"").replace(/\/api\/brand-contact$/i,"").replace(/\/api$/i,"");
-  var u=root+"/api/brand-contact",body={domain:dom,brand:brand||""},t2=String(text||"").trim();
-  if(t2)body.pageText=t2;
-  return firebase.auth().currentUser.getIdToken().then(function(t){
-    /* The backend answers CORS itself (Access-Control-Allow-Origin plus
-       Allow-Headers: Authorization + X-Provider + X-Api-Key), so nothing is added
-       to the request here - sending an "Access-Control-*" request header would
-       actually break the preflight. credentials:"omit" keeps the request
-       compatible with that "*" origin. */
-    var h={"Content-Type":"application/json",Accept:"application/json",Authorization:"Bearer "+t};
-    /* The visitor's own key for the finder they picked, used for this request only. */
-    h["x-provider"]=provider;
-    h["x-api-key"]=apiKey;
-    return fetch(u,{method:"POST",mode:"cors",credentials:"omit",cache:"no-store",headers:h,body:JSON.stringify(body)})
-  }).then(function(x){return x.json().then(function(j){if(!x.ok)throw new Error(j.error||"Automatic contact lookup failed.");return j})})
-    .catch(function(e){return {found:false,reason:"REQUEST_FAILED",message:e.message||"Automatic contact lookup failed."}})
-}
-function applyAuto(r,a){
-  if(!a)return;
-  r.auto=a;
-  var viaAI=a.email_source==="gemini";
-  var viaP=(a.meta&&a.meta.provider)==="prospeo"?"Prospeo":"Hunter";
-  if(a.is_fallback&&!okEmail(r.email)&&a.email){r.email=a.email;r.emailType=viaAI?"Gemini (generic mailbox)":"Auto (generic mailbox)"}
-  if(a.found&&okEmail(a.email)){if(!r.email){r.email=a.email;r.emailType=viaAI?"Gemini (website text)":"Auto via "+viaP}if(!r.cname&&a.contact_name)r.cname=a.contact_name}
-  if(a.email||a.message)r.note=(a.found?a.message||"Found a contact automatically.":(a.message||r.note))
-}
-function enrich(r){
-  if(CONTACT_API.indexOf("PASTE")>-1){msg("Contact search is not connected yet.");return Promise.resolve()}
-  r.busy=true;r.auto=null;draw();var d=cleanDom(r.domain),pr=Promise.resolve(d);
-  if(d)r.domainSource="link in description";
-  else{var g=norm(r.brand)+".com";pr=mx(g).then(function(ok){if(ok){r.domainSource="guessed from the name, check it";return g}return ""})}
-  return pr.then(function(dom){r.domain=dom;r.linkedInSearchUrl=liUrl(r);
-    if(!dom){r.found=null;r.auto=null;r.note="No website found. Type the brand's website in the box, then press Find contacts.";return}
-    return firebase.auth().currentUser.getIdToken().then(function(t){return fetch(CONTACT_API+"?"+new URLSearchParams({domain:dom,brand:r.brand}),{headers:{Authorization:"Bearer "+t}})})
-      .then(function(x){return x.json().then(function(j){if(!x.ok)throw new Error(j.error||"Lookup failed");return j})})
-      .then(function(j){r.found=j;
-        if(!j.reachable)r.note="That website did not answer. Check the website address.";
-        else if(!j.best)r.note="No email is printed on this website ("+j.pagesChecked+" pages checked). Try LinkedIn, or send it to Claude chat.";
-        else{r.note="";if(!r.email){r.email=j.best.email;r.emailType=j.best.label}}
-        if(!j.best)return autoContact(dom,r.brand,scrapedText(j)).then(function(a){applyAuto(r,a)})})
-      .catch(function(e){
-        /* Scraper failed (offline, CORS, 5xx): we still have no email, so ask
-           the fallback backend before giving up. */
-        r.found=null;r.note=e.message||"Lookup failed.";
-        if(!CONTACT_FALLBACK_API||!dom)return;
-        return autoContact(dom,r.brand,scrapedText(r.found)).then(function(a){applyAuto(r,a)})})
-  }).catch(function(e){r.note=e.message}).then(function(){r.busy=false;save();draw()})}
-$("all").onclick=function(){var l=S.rows.filter(function(r){return !r.found});if(!l.length){msg("Every brand has already been searched.");return}
-  l.reduce(function(p,r){return p.then(function(){return enrich(r)})},Promise.resolve()).then(function(){msg("Contact search finished for "+l.length+" brand(s).")})};
-$("ask").onclick=function(){var l=S.rows.filter(function(r){return !okEmail(r.email)}).map(function(r){return "- "+r.brand+(r.domain?" ("+r.domain+")":"")+(r.channels.length?", seen with "+r.channels.join(", "):"")});
-  var t="Find the official partnership, marketing or support email for each brand below, using only emails printed on the brand's own website. Do not guess. Compare with my Leads sheet and suggest one creator from my roster for each.\n"+l.join("\n");
-  (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){msg("Copied. Paste it into your Claude chat ("+l.length+" brands).")},function(){msg("Copy was blocked by the browser.")})};
-/* ---- cards ---- */
-function line(label,val,note){var d=mk("div",null,"blk");d.appendChild(mk("b",label));if(val){d.appendChild(mk("code",val));d.appendChild(mk("div",note,"guess"))}else d.appendChild(mk("span","Press Find contacts"));return d}
-function visible(){var q=$("q").value.trim().toLowerCase();return S.rows.filter(function(r){return !q||(r.brand+" "+r.channels.join(" ")).toLowerCase().indexOf(q)>-1})}
-function draw(){
-  var cr={};S.rows.forEach(function(r){r.channels.forEach(function(c){cr[c]=1})});
-  $("sB").textContent=S.rows.length;$("sC").textContent=Object.keys(cr).length;$("sE").textContent=S.rows.filter(function(r){return okEmail(r.email)}).length;
-  var box=$("cards"),v=visible();box.innerHTML="";$("empty").style.display=v.length?"none":"block";
-  v.forEach(function(r){var c=mk("div",null,"bc");c.appendChild(mk("h3",r.brand));
-    c.appendChild(mk("small",r.count+" sponsored video"+(r.count===1?"":"s")+" on "+r.channels.join(", ")));
-    var chips=mk("div");r.codes.slice(0,6).forEach(function(k){chips.appendChild(mk("span","Code "+k,"chip"))});c.appendChild(chips);
-    var vd=mk("div",null,"blk");vd.appendChild(mk("b","Videos"));r.videos.slice(0,3).forEach(function(x){var a=mk("a",(x.date?x.date+"  ":"")+x.title);a.href=x.url;a.target="_blank";a.rel="noreferrer";a.style.display="block";a.style.color="inherit";vd.appendChild(a)});if(r.count>3)vd.appendChild(mk("small","+"+(r.count-3)+" more"));c.appendChild(vd);
-    var dm=mk("input",null,"dm");dm.value=r.domain||"";dm.placeholder="brand website, e.g. brand.com";dm.setAttribute("aria-label","Website for "+r.brand);dm.onchange=function(){r.domain=cleanDom(dm.value);r.linkedInSearchUrl="";save();draw()};c.appendChild(dm);
-    function cl(label,o){var d=mk("div",null,"blk");d.appendChild(mk("b",label));if(o&&o.email){var e=mk("code",o.email);e.className="good";d.appendChild(e);d.appendChild(mk("small","Found on "+String(o.page).replace(/^https?:\/\//,"")))}else d.appendChild(mk("span",r.found?"Not found on website":"Press Find contacts"));return d}
-    if(r.domainSource&&r.domain){var ds=mk("div",null,"blk");ds.appendChild(mk("small","Website: "+r.domain+" ("+r.domainSource+")"));c.appendChild(ds)}
-    c.appendChild(cl("Partnership Email",r.found&&r.found.partnership));c.appendChild(cl("Marketing / PR Email",r.found&&r.found.marketing));
-    if(r.found&&r.found.reachable&&!r.found.partnership&&!r.found.marketing)c.appendChild(cl("Support Email (fallback)",r.found.support));
-    if(r.auto&&(r.auto.contact_name||r.auto.email||r.auto.linkedin_url)){var ab=mk("div",null,"blk");ab.appendChild(mk("b",r.auto.is_fallback?"Auto contact (fallback mailbox)":(r.auto.email_source==="gemini"?"Auto contact (Gemini AI)":"Auto contact ("+((r.auto.meta&&r.auto.meta.provider)==="prospeo"?"Prospeo":"Hunter")+")")));
-      if(r.auto.contact_name)ab.appendChild(mk("code",r.auto.contact_name));
-      ab.appendChild(mk("small",(r.auto.title||"Contact")+(r.auto.email_status?" · "+r.auto.email_status:"")));
-      if(r.auto.linkedin_url){var la=mk("a","LinkedIn profile");la.href=r.auto.linkedin_url;la.target="_blank";la.rel="noreferrer";la.style.display="block";ab.appendChild(la)}
-      c.appendChild(ab)}
-    if(r.note){var n=mk("div",null,"blk");n.appendChild(mk("small",r.note));c.appendChild(n)}
-    if(r.found&&r.found.reachable&&!r.found.best){var lk=(r.found.programs||[]).concat(r.found.contactPages||[]);if(lk.length){var pl=mk("div",null,"blk");pl.appendChild(mk("b","Pages to try (forms or creator programs)"));lk.forEach(function(u){var a2=mk("a",String(u).replace(/^https?:\/\//,""));a2.href=u;a2.target="_blank";a2.rel="noreferrer";a2.style.display="block";pl.appendChild(a2)});c.appendChild(pl)}}
-    var cn=mk("input",null,"dm");cn.value=r.cname||"";cn.placeholder="Contact name (you add)";cn.setAttribute("aria-label","Contact name for "+r.brand);cn.onchange=function(){r.cname=cn.value.trim();save()};c.appendChild(cn);
-    var ue=mk("input",null,"dm");ue.type="email";ue.value=r.email||"";ue.placeholder="Confirmed contact email (you add)";ue.setAttribute("aria-label","Contact email for "+r.brand);ue.onchange=function(){r.email=ue.value.trim();save();draw()};c.appendChild(ue);if(r.emailType&&r.email)c.appendChild(mk("small","Filled from the website: "+r.emailType));
-    var a=mk("div",null,"act"),f=mk("button",r.busy?"Looking...":"Find contacts");f.disabled=!!r.busy;f.onclick=function(){enrich(r)};a.appendChild(f);
-    var li=mk("a","Search on LinkedIn");li.href=r.linkedInSearchUrl||("https://www.linkedin.com/search/results/people/?keywords="+encodeURIComponent(r.brand+" Partnerships Manager"));li.target="_blank";li.rel="noreferrer";a.appendChild(li);
-    var m=mk("a","Email Now");if(okEmail(r.email)){m.href="mailto:"+r.email+"?subject="+encodeURIComponent("An idea for "+r.brand+"'s next campaign")}else m.className="off";a.appendChild(m);
-    var d=mk("button","Remove");d.onclick=function(){S.rows=S.rows.filter(function(x){return x!==r});save();draw()};a.appendChild(d);c.appendChild(a);box.appendChild(c)})}
-$("q").oninput=draw;
-function q(v){return '"'+String(v==null?"":v).replace(/"/g,'""')+'"'}
-$("csv").onclick=function(){var h=["Brand","Domain","Channels","Sponsored videos","Codes","Partnership email (found)","Marketing email (found)","Support email (found)","Best contact","Best contact type","Found on page","Contact name","Contact email","linkedInSearchUrl","Status"],
-  L=[h.map(q).join(",")].concat(S.rows.map(function(r){var f=r.found||{},b=f.best||{};return [r.brand,r.domain,r.channels.join("; "),r.count,r.codes.join("; "),f.partnership&&f.partnership.email,f.marketing&&f.marketing.email,f.support&&f.support.email,b.email,b.label,b.page,r.cname,r.email,r.linkedInSearchUrl||liUrl(r),r.status].map(q).join(",")}));
-  var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([L.join("\n")],{type:"text/csv"}));a.download="yaqubu-radar.csv";document.body.appendChild(a);a.click();a.remove()};
-$("wipe").onclick=function(){if(S.rows.length&&confirm("Remove all saved brands from this device?")){S.rows=[];save();draw()}};
-$("ytst").textContent=ytKey()?"Key saved on this device.":"No key saved yet.";
-hukStatus();
-prStatus();
-provStatus();
+  const API_KEY_STORAGE = 'creatorFinderApiKey';
 
-/* ---------- ACCOUNTS (Firebase Authentication) ---------- */
-/* PASTE YOUR FIREBASE SETTINGS HERE (see the setup steps). Leave the quotes. */
-var FIREBASE_CONFIG={apiKey:"AIzaSyD6KOk-i1Ke6t2-gQkAHIAZj9xP6lax-ZA",authDomain:"yaqubu-radar.firebaseapp.com",projectId:"yaqubu-radar",storageBucket:"yaqubu-radar.firebasestorage.app",messagingSenderId:"1039339020920",appId:"1:1039339020920:web:fc7b7376f92c62ad31838d"};
+  // Prefill API key from localStorage.
+  const savedKey = localStorage.getItem(API_KEY_STORAGE) || '';
+  if (savedKey) apiKeyInput.value = savedKey;
+  updateKeyStatus(savedKey);
 
-function amsg(t){$("amsg").textContent=t||""}
-function nice(e){var c=e&&e.code,m={"auth/invalid-credential":"Wrong email or password.","auth/wrong-password":"Wrong email or password.","auth/user-not-found":"Wrong email or password.","auth/email-already-in-use":"That email already has an account. Try Sign in.","auth/weak-password":"Use a password with at least 6 characters.","auth/invalid-email":"That email address does not look right.","auth/too-many-requests":"Too many tries. Wait a few minutes and try again.","auth/network-request-failed":"No internet connection.","auth/operation-not-supported-in-this-environment":"Open this page from a website address (https), not from a file on your computer.","auth/unauthorized-domain":"This website address is not allowed yet. The owner must add it in Firebase."};return m[c]||"Something went wrong ("+(c||"unknown")+")."}
-function lock(){$("auth").hidden=false;$("appMain").hidden=true}
-function authInit(){
-  if(!FIREBASE_CONFIG.apiKey||!window.firebase){lock();$("aform").hidden=true;amsg("Accounts are not set up yet. The owner must add the Firebase settings to this file.");return}
-  firebase.initializeApp(FIREBASE_CONFIG);var auth=firebase.auth();
-  auth.onAuthStateChanged(function(u){
-    amsg("");
-    if(!u){KEY="yqr:v1";S={rows:[],known:""};$("aform").hidden=false;$("verify").hidden=true;lock();return}
-    if(!u.emailVerified){$("aform").hidden=true;$("verify").hidden=false;$("vmail").textContent=u.email;lock();return}
-    KEY="yqr:v2:"+u.uid;S={rows:[],known:""};load();$("who").textContent=u.email;$("auth").hidden=true;$("appMain").hidden=false;draw()
+  apiKeyInput.addEventListener('input', () => {
+    const val = apiKeyInput.value.trim();
+    localStorage.setItem(API_KEY_STORAGE, val);
+    updateKeyStatus(val);
   });
-  $("bIn").onclick=function(){amsg("Signing in...");auth.signInWithEmailAndPassword($("em").value.trim(),$("pw").value).catch(function(e){amsg(nice(e))})};
-  $("bUp").onclick=function(){amsg("Creating your account...");auth.createUserWithEmailAndPassword($("em").value.trim(),$("pw").value).then(function(c){return c.user.sendEmailVerification()}).catch(function(e){amsg(nice(e))})};
-  $("bReset").onclick=function(){var m=$("em").value.trim();if(!m){amsg("Type your email first.");return}auth.sendPasswordResetEmail(m).then(function(){amsg("If that email has an account, a reset link was sent.")}).catch(function(e){amsg(nice(e))})};
-  $("bResend").onclick=function(){auth.currentUser.sendEmailVerification().then(function(){amsg("Sent again. Check your inbox and spam.")}).catch(function(e){amsg(nice(e))})};
-  $("bCheck").onclick=function(){auth.currentUser.reload().then(function(){if(auth.currentUser.emailVerified){location.reload()}else{amsg("Not verified yet. Open the link in the email first.")}}).catch(function(e){amsg(nice(e))})};
-  $("bOut").onclick=$("bOut2").onclick=function(){auth.signOut()}
-}
-authInit();
+
+  function updateKeyStatus(val) {
+    if (val) {
+      apiKeyStatus.textContent = 'Key saved on this device';
+      apiKeyStatus.className = 'pill ok';
+    } else {
+      apiKeyStatus.textContent = 'No key saved yet';
+      apiKeyStatus.className = 'pill bad';
+    }
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text === null || text === undefined ? '' : String(text);
+    return div.innerHTML;
+  }
+
+  function formatNumber(value) {
+    return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  function setLoading(loading) {
+    searchBtn.disabled = loading;
+    loadingBox.style.display = loading ? 'block' : 'none';
+    errorBox.style.display = 'none';
+    resultsList.style.display = loading ? 'none' : 'block';
+    emptyBox.style.display = 'none';
+  }
+
+  function showError(message) {
+    errorBox.textContent = message;
+    errorBox.style.display = 'block';
+    resultsList.style.display = 'none';
+    emptyBox.style.display = 'none';
+  }
+
+  function showResults(creators) {
+    errorBox.style.display = 'none';
+    resultsList.innerHTML = '';
+    resultsList.style.display = 'block';
+
+    if (!creators || creators.length === 0) {
+      emptyBox.style.display = 'block';
+      resultsTitle.textContent = 'Results';
+      resultsCount.textContent = '';
+      return;
+    }
+
+    resultsTitle.textContent = 'Results';
+    resultsCount.textContent = '(' + creators.length + ' creator' + (creators.length !== 1 ? 's' : '') + ')';
+
+    for (const c of creators) {
+      const el = document.createElement('div');
+      el.className = 'creator';
+      el.innerHTML =
+        '<div class="meta">' +
+        '<div class="name">' + escapeHtml(c.channelName) + '</div>' +
+        '<div class="subs">' + formatNumber(c.subscriberCount) + ' subscribers</div>' +
+        '</div>' +
+        '<a href="' + escapeHtml(c.url) + '" target="_blank" rel="noopener">Open channel</a>';
+      resultsList.appendChild(el);
+    }
+  }
+
+  searchBtn.addEventListener('click', async () => {
+    const apiKey = apiKeyInput.value.trim();
+    const keyword = keywordInput.value.trim();
+    const minRaw = minInput.value.trim();
+    const maxRaw = maxInput.value.trim();
+
+    if (!apiKey) {
+      showError('Please add your YouTube Data API key first.');
+      apiKeyInput.focus();
+      return;
+    }
+    if (!keyword) {
+      showError('Please enter a keyword.');
+      keywordInput.focus();
+      return;
+    }
+    if (minRaw === '' || maxRaw === '') {
+      showError('Please enter both a minimum and maximum subscriber count.');
+      (minRaw === '' ? minInput : maxInput).focus();
+      return;
+    }
+    const minN = Number(minRaw);
+    const maxN = Number(maxRaw);
+    if (!Number.isFinite(minN) || !Number.isFinite(maxN) || minN < 0 || maxN < 0) {
+      showError('Subscriber counts must be zero or greater.');
+      return;
+    }
+    if (minN > maxN) {
+      showError('Minimum subscribers cannot be greater than maximum.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch('/api/find-creators', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey
+        },
+        body: JSON.stringify({
+          keyword: keyword,
+          minSubs: minN,
+          maxSubs: maxN
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        showError(data && data.error ? data.error : 'Request failed.');
+        return;
+      }
+
+      showResults(data && data.creators);
+    } catch (err) {
+      showError('Unable to reach the server. Check your network connection and try again.');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  });
+
+  clearBtn.addEventListener('click', () => {
+    resultsList.innerHTML = '';
+    resultsList.style.display = 'none';
+    emptyBox.style.display = 'none';
+    errorBox.style.display = 'none';
+    resultsCount.textContent = '';
+    resultsTitle.textContent = 'Results';
+  });
+})();
 </script>
 </body>
 </html>

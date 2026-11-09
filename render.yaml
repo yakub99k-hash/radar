@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: creator-finder
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: PORT
+        value: 8787
