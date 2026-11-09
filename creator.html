@@ -418,6 +418,10 @@
 
     setLoading(true);
 
+    // 60-second timeout so the button never spins forever.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
     try {
       const response = await fetch('/api/find-creators', {
         method: 'POST',
@@ -429,21 +433,29 @@
           keyword: keyword,
           minSubs: minN,
           maxSubs: maxN
-        })
+        }),
+        signal: controller.signal
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        showError(data && data.error ? data.error : 'Request failed.');
+        // Display the exact error message returned by the backend (e.g. 429 quota,
+        // 500 server error, invalid API key, etc.).
+        showError(data && data.error ? data.error : 'Request failed with status ' + response.status + '.');
         return;
       }
 
       showResults(data && data.creators);
     } catch (err) {
-      showError('Unable to reach the server. Check your network connection and try again.');
-      console.error(err);
+      if (err.name === 'AbortError') {
+        showError('The request timed out after 60 seconds. The server may be starting up; please try again.');
+      } else {
+        showError('Unable to reach the server. Check your network connection and try again.');
+        console.error(err);
+      }
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   });
