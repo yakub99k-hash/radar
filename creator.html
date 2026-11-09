@@ -42,20 +42,20 @@
     gap: 12px;
   }
   .logo {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    background: var(--card2);
-    border: 1px solid var(--line);
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
   }
   .logo svg {
-    width: 22px;
-    height: 22px;
-    color: var(--accent);
+    width: 24px;
+    height: 24px;
+    color: #ffffff;
   }
   .back-link {
     display: inline-flex;
@@ -123,11 +123,11 @@
   }
   .field input:focus { outline: none; border-color: var(--accent); }
   .field input::placeholder { color: #6b7280; }
-  .row-actions { display: flex; gap: 10px; margin-top: 6px; }
+  .row-actions { display: flex; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
   button {
     border: none;
     border-radius: 10px;
-    padding: 11px 18px;
+    padding: 11px 20px;
     font-size: 1rem;
     font-weight: 600;
     cursor: pointer;
