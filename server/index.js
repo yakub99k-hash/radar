@@ -99,6 +99,18 @@ function readableError(err) {
 }
 
 /**
+ * OPTIONS /api/find-creators
+ * Handles CORS preflight requests for the find-creators endpoint.
+ */
+app.options('/api/find-creators', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Api-Key');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  return res.status(204).end();
+});
+
+/**
  * POST /api/find-creators
  * Body: { keyword, minSubs, maxSubs }
  * Header: x-api-key (the visitor's own YouTube Data API key)
