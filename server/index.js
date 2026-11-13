@@ -10,6 +10,19 @@ const MAX_CHANNEL_IDS_PER_CALL = 50;
 const app = express();
 app.disable('x-powered-by');
 
+// Handle CORS preflight OPTIONS requests immediately, before any other
+// middleware or route handler, so preflight requests are always answered
+// successfully and never reach route handlers that only accept POST.
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Api-Key');
+    return res.sendStatus(204);
+  }
+  next();
+});
+
 app.use(express.json({ limit: '256kb' }));
 
 // CORS so the frontend can call the API from the same origin or another host.
