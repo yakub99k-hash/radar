@@ -403,8 +403,11 @@
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
+    const url = 'https://radar-backend-kuw7.onrender.com/api/find-creators';
+    console.log('Fetching URL:', url);
+
     try {
-      const response = await fetch('/api/find-creators', {
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -448,7 +451,7 @@
       if (error.name === 'AbortError') {
         alert('The request timed out after 60 seconds. Please try again.');
       } else {
-        alert(error.message);
+        alert('URL: ' + url + ' | Error: ' + error.message);
       }
     } finally {
       clearTimeout(timeoutId);
