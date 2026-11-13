@@ -385,36 +385,17 @@
   }
 
   searchBtn.addEventListener('click', async () => {
+    alert('Button clicked!');
+
     const apiKey = apiKeyInput.value.trim();
+    if (!apiKey) {
+      alert('Please enter an API key');
+      return;
+    }
+
     const keyword = keywordInput.value.trim();
     const minRaw = minInput.value.trim();
     const maxRaw = maxInput.value.trim();
-
-    if (!apiKey) {
-      showError('Please add your YouTube Data API key first.');
-      apiKeyInput.focus();
-      return;
-    }
-    if (!keyword) {
-      showError('Please enter a keyword.');
-      keywordInput.focus();
-      return;
-    }
-    if (minRaw === '' || maxRaw === '') {
-      showError('Please enter both a minimum and maximum subscriber count.');
-      (minRaw === '' ? minInput : maxInput).focus();
-      return;
-    }
-    const minN = Number(minRaw);
-    const maxN = Number(maxRaw);
-    if (!Number.isFinite(minN) || !Number.isFinite(maxN) || minN < 0 || maxN < 0) {
-      showError('Subscriber counts must be zero or greater.');
-      return;
-    }
-    if (minN > maxN) {
-      showError('Minimum subscribers cannot be greater than maximum.');
-      return;
-    }
 
     setLoading(true);
 
@@ -431,8 +412,8 @@
         },
         body: JSON.stringify({
           keyword: keyword,
-          minSubs: minN,
-          maxSubs: maxN
+          minSubs: minRaw ? Number(minRaw) : 0,
+          maxSubs: maxRaw ? Number(maxRaw) : 0
         }),
         signal: controller.signal
       });
@@ -440,20 +421,13 @@
       const data = await response.json();
 
       if (!response.ok) {
-        // Display the exact error message returned by the backend (e.g. 429 quota,
-        // 500 server error, invalid API key, etc.).
-        showError(data && data.error ? data.error : 'Request failed with status ' + response.status + '.');
+        alert(data && data.error ? data.error : 'Request failed with status ' + response.status + '.');
         return;
       }
 
       showResults(data && data.creators);
-    } catch (err) {
-      if (err.name === 'AbortError') {
-        showError('The request timed out after 60 seconds. The server may be starting up; please try again.');
-      } else {
-        showError('Unable to reach the server. Check your network connection and try again.');
-        console.error(err);
-      }
+    } catch (error) {
+      alert(error.message);
     } finally {
       clearTimeout(timeoutId);
       setLoading(false);
