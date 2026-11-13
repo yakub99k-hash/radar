@@ -418,16 +418,38 @@
         signal: controller.signal
       });
 
-      const data = await response.json();
-
+      // Check the status before parsing the body. Mobile Safari returns
+      // non-JSON error bodies (HTML pages, empty responses) for failed
+      // requests, and response.json() throws "The string did not match the
+      // expected pattern." before the ok check ever runs.
       if (!response.ok) {
-        alert(data && data.error ? data.error : 'Request failed with status ' + response.status + '.');
+        let message = 'Request failed with status ' + response.status + '.';
+        try {
+          const errorData = await response.json();
+          if (errorData && errorData.error) message = errorData.error;
+        } catch (parseError) {
+          // Non-JSON error body; fall back to the status text.
+          message = response.statusText || message;
+        }
+        alert(message);
+        return;
+      }
+
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        alert('The server returned an invalid response. Please try again.');
         return;
       }
 
       showResults(data && data.creators);
     } catch (error) {
-      alert(error.message);
+      if (error.name === 'AbortError') {
+        alert('The request timed out after 60 seconds. Please try again.');
+      } else {
+        alert(error.message);
+      }
     } finally {
       clearTimeout(timeoutId);
       setLoading(false);
