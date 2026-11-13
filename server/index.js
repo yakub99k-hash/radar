@@ -8,6 +8,15 @@ const MAX_SEARCH_RESULTS = 50;
 const MAX_CHANNEL_IDS_PER_CALL = 50;
 
 const app = express();
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Api-Key');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
 app.disable('x-powered-by');
 
 // Handle CORS preflight OPTIONS requests immediately, before any other
