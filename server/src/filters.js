@@ -257,7 +257,8 @@ function isAcceptedVerification(verification, options = {}) {
     return false;
   }
   if (status === 'accept_all' || result === 'risky') {
-    return allowAcceptAll && status !== 'invalid' && result !== 'undeliverable';
+    // Accept catch-all / risky addresses so real-person emails aren't dropped.
+    return status !== 'invalid' && result !== 'undeliverable';
   }
   return acceptStatuses.includes(status) || acceptStatuses.includes(result);
 }
@@ -268,6 +269,7 @@ function emailStatusLabel(verification) {
   const result = String((verification && verification.result) || '').toLowerCase();
   if (status === 'valid') return 'valid';
   if (result === 'deliverable') return 'deliverable';
+  if (status === 'accept_all' || result === 'risky') return 'risky';
   return status || result || 'unknown';
 }
 

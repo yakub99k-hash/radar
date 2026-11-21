@@ -191,27 +191,17 @@ test('an unverified email is never returned as a contact', async () => {
   });
 });
 
-test('catch-all addresses are rejected by default and accepted on request', async () => {
+test('catch-all addresses are accepted as Risky by default', async () => {
   const verify = { status: 'accept_all', result: 'risky', score: 70 };
 
-  const strict = makeFinder({
+  const finder = makeFinder({
     apollo: makeApollo({ people: [INFLUENCER], person: JANE }),
     hunter: makeHunter({ verify }),
     cache: null
   });
-  const strictResult = await strict.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
-  assert.equal(strictResult.found, false);
-  assert.equal(strictResult.reason, REASONS.EMAIL_UNVERIFIED);
-
-  const relaxed = makeFinder({
-    apollo: makeApollo({ people: [INFLUENCER], person: JANE }),
-    hunter: makeHunter({ verify }),
-    options: { allowAcceptAll: true },
-    cache: null
-  });
-  const relaxedResult = await relaxed.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
-  assert.equal(relaxedResult.found, true);
-  assert.equal(relaxedResult.email_status, 'accept_all');
+  const result = await finder.findContact({ apiKey: 'user-key', domain: 'brand.com', brand: 'Brand' });
+  assert.equal(result.found, true);
+  assert.equal(result.email_status, 'risky');
 });
 
 test('off-domain addresses are refused when the brand domain is required', async () => {

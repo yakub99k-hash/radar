@@ -136,7 +136,7 @@ test('isAcceptedVerification follows "valid" or "deliverable"', () => {
   assert.equal(isAcceptedVerification({ status: 'unknown', result: 'deliverable' }), true);
   assert.equal(isAcceptedVerification({ status: 'invalid', result: 'undeliverable' }), false);
   assert.equal(isAcceptedVerification({ status: 'unknown', result: 'unknown' }), false);
-  assert.equal(isAcceptedVerification({ status: 'accept_all', result: 'risky' }), false);
+  assert.equal(isAcceptedVerification({ status: 'accept_all', result: 'risky' }), true);
   assert.equal(
     isAcceptedVerification({ status: 'accept_all', result: 'risky' }, { allowAcceptAll: true }),
     true
@@ -148,6 +148,6 @@ test('isAcceptedVerification follows "valid" or "deliverable"', () => {
 test('emailStatusLabel reports valid/deliverable', () => {
   assert.equal(emailStatusLabel({ status: 'valid', result: 'deliverable' }), 'valid');
   assert.equal(emailStatusLabel({ status: 'unknown', result: 'deliverable' }), 'deliverable');
-  assert.equal(emailStatusLabel({ status: 'accept_all', result: 'risky' }), 'accept_all');
+  assert.equal(emailStatusLabel({ status: 'accept_all', result: 'risky' }), 'risky');
   assert.equal(emailStatusLabel({}), 'unknown');
 });

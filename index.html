@@ -88,6 +88,7 @@ td input{min-width:200px;font-family:ui-monospace,monospace;font-size:.78rem}td 
 .badge.verified{background:rgba(110,231,183,.12);color:var(--ok);border-color:rgba(110,231,183,.4)}
 .badge.failed{background:rgba(252,165,165,.12);color:var(--bad);border-color:rgba(252,165,165,.4)}
 .badge.low{background:rgba(252,211,77,.14);color:var(--warn);border-color:rgba(252,211,77,.45)}
+.badge.risky{background:rgba(251,146,60,.16);color:var(--warn);border-color:rgba(251,146,60,.5)}
 .badge.pending{background:rgba(161,161,170,.12);color:var(--mu);border-color:rgba(161,161,170,.35)}
 .badge svg{width:11px;height:11px;display:block}
 .crm-empty{padding:48px 24px;text-align:center;color:var(--mu);border:1px dashed var(--ln);border-radius:16px;background:var(--card2)}
@@ -419,6 +420,7 @@ function crmStatus(r){
   var generic=GENERIC_MAIL.test(mb) || /^(info|support|help|hello|contact|sales|press|media|pr|marketing|partners?|team|office|admin)[._-]/.test(mb);
   if(a.is_fallback||a.reason==="GENERIC_EMAIL"||generic)return "Low Priority";
   if(a.found&&em&&(a.email_status==="valid"||a.email_status==="deliverable"||!a.email_status))return "verified";
+  if(a.found&&em&&a.email_status==="risky")return "Risky";
   return "Failed";
 }
 function crmList(){
@@ -431,9 +433,9 @@ function crmVisible(){
   return list;
 }
 function badgeHtml(c){
-  var s=c.status, lab=s==="Low Priority"?"Low Priority":(s==="verified"?"Verified":(s==="Failed"?"Failed":"Pending")),
-      cls=s==="verified"?"verified":(s==="Failed"?"failed":(s==="Low Priority"?"low":"pending"));
-  var icons={verified:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',failed:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',low:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 10H3L8 15"/></svg>',pending:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56L23 7"/></svg>'};
+  var s=c.status, lab=s==="Low Priority"?"Low Priority":(s==="verified"?"Verified":(s==="Risky"?"Risky":(s==="Failed"?"Failed":"Pending"))),
+      cls=s==="verified"?"verified":(s==="Failed"?"failed":(s==="Low Priority"?"low":(s==="Risky"?"risky":"pending")));
+  var icons={verified:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',failed:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',low:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 10H3L8 15"/></svg>',risky:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',pending:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56L23 7"/></svg>'};
   return '<span class="badge '+cls+'">'+(icons[s]||icons.pending)+'<span>'+esc(lab)+'</span></span>';
 }
 function drawCrm(){

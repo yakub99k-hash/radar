@@ -560,26 +560,6 @@ function createContactFinder(deps = {}) {
     const mailboxes = ranked.filter((entry) => entry.generic);
     console.log(`[CONTACT FINDER] Hunter ranking domain="${domain}" named=${named.length} preferred=${preferred.length} others=${others.length} mailboxes=${mailboxes.length}`);
 
-    // If Hunter only knows generic role mailboxes (info@, support@, hello@,
-    // contact@), don't spend verification credits. Return Low Priority
-    // immediately instead of verifying a role inbox.
-    if (named.length === 0 && mailboxes.length > 0) {
-      const generic = mailboxes[0];
-      if (isStrictGenericEmail(generic.email)) {
-        console.log(`[CONTACT FINDER] Hunter returning Low Priority domain="${domain}" only generic mailbox="${generic.email}"`);
-        return buildResult({
-          title: generic.position || null,
-          email: generic.email,
-          email_status: 'unverified',
-          is_fallback: true,
-          found: false,
-          reason: REASONS.GENERIC_EMAIL,
-          message: `Only the generic mailbox ${generic.email} was found at ${domain}. Marked Low Priority to save credits.`,
-          meta: { ...meta(), skipped_verification: true }
-        });
-      }
-    }
-
     const meta = () => ({
       ...baseMeta,
       candidates: emails.length,
@@ -1147,31 +1127,10 @@ function createContactFinder(deps = {}) {
     }
 
     // If the brand's own site only lists a generic role mailbox (info@,
-    // support@, hello@, contact@), skip the provider search entirely to save
-    // credits. Return Low Priority immediately.
-    if (fromText.generic.length && !fromText.personal.length) {
-      const email = fromText.generic[0];
-      if (isStrictGenericEmail(email)) {
-        console.log(`[CONTACT FINDER] Skipping provider search for domain="${domain}" — only generic mailbox "${email}" found`);
-        return buildResult({
-          email,
-          email_status: 'unverified',
-          is_fallback: true,
-          found: false,
-          reason: REASONS.GENERIC_EMAIL,
-          email_source: 'gemini',
-          message: `Only the generic mailbox ${email} was found on the site. Skipping provider search to save credits.`,
-          meta: {
-            domain,
-            brand: brand || null,
-            strategy: STRATEGIES.GEMINI,
-            provider,
-            skipped_provider: true,
-            elapsed_ms: now() - startedAt
-          }
-        });
-      }
-    }
+    // NOTE: We do NOT skip the provider search here even when only a generic
+    // mailbox is on the site. The provider (Hunter/Prospeo) may still find a
+    // real person's email. We fall back to the generic mailbox below only if
+    // the provider finds nothing.
 
     const result = await runStrategies(domain, brand, clients, startedAt);
     console.log(`[CONTACT FINDER] runStrategies result domain="${domain}" found=${result.found} email="${result.email || ''}" reason="${result.reason || ''}" email_status="${result.email_status || ''}" is_fallback=${result.is_fallback}`);
