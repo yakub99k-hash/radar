@@ -44,6 +44,16 @@ const PROVIDERS = Object.freeze(['hunter', 'prospeo']);
 /** Loose shape check; the strict rules live in filters.analyzeEmail/emailOnDomain. */
 const EMAIL_SHAPE_RE = /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/;
 
+/** Strict generic mailbox check for the four role addresses we never want to verify: info@, support@, hello@, contact@. */
+const STRICT_GENERIC_MAILBOXES = new Set(['info', 'support', 'hello', 'contact']);
+function isStrictGenericEmail(email) {
+  if (!email || typeof email !== 'string') return false;
+  const at = email.lastIndexOf('@');
+  if (at <= 0) return false;
+  const mailbox = email.slice(0, at).toLowerCase().replace(/[._-]+$/, '');
+  return STRICT_GENERIC_MAILBOXES.has(mailbox);
+}
+
 /** The shape the frontend always receives, even when nothing was found. */
 function buildResult(partial) {
   return {
@@ -529,6 +539,25 @@ function createContactFinder(deps = {}) {
     const preferred = named.filter((entry) => entry.score >= minTitleScore);
     const others = named.filter((entry) => entry.score < minTitleScore);
     const mailboxes = ranked.filter((entry) => entry.generic);
+
+    // If Hunter only knows generic role mailboxes (info@, support@, hello@,
+    // contact@), don't spend verification credits. Return Low Priority
+    // immediately instead of verifying a role inbox.
+    if (named.length === 0 && mailboxes.length > 0) {
+      const generic = mailboxes[0];
+      if (isStrictGenericEmail(generic.email)) {
+        return buildResult({
+          title: generic.position || null,
+          email: generic.email,
+          email_status: 'unverified',
+          is_fallback: true,
+          found: false,
+          reason: REASONS.GENERIC_EMAIL,
+          message: `Only the generic mailbox ${generic.email} was found at ${domain}. Marked Low Priority to save credits.`,
+          meta: { ...meta(), skipped_verification: true }
+        });
+      }
+    }
 
     const meta = () => ({
       ...baseMeta,
@@ -1068,6 +1097,32 @@ function createContactFinder(deps = {}) {
           elapsed_ms: now() - startedAt
         }
       });
+    }
+
+    // If the brand's own site only lists a generic role mailbox (info@,
+    // support@, hello@, contact@), skip the provider search entirely to save
+    // credits. Return Low Priority immediately.
+    if (fromText.generic.length && !fromText.personal.length) {
+      const email = fromText.generic[0];
+      if (isStrictGenericEmail(email)) {
+        return buildResult({
+          email,
+          email_status: 'unverified',
+          is_fallback: true,
+          found: false,
+          reason: REASONS.GENERIC_EMAIL,
+          email_source: 'gemini',
+          message: `Only the generic mailbox ${email} was found on the site. Skipping provider search to save credits.`,
+          meta: {
+            domain,
+            brand: brand || null,
+            strategy: STRATEGIES.GEMINI,
+            provider,
+            skipped_provider: true,
+            elapsed_ms: now() - startedAt
+          }
+        });
+      }
     }
 
     const result = await runStrategies(domain, brand, clients, startedAt);
