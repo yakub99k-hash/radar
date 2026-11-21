@@ -422,7 +422,7 @@ function crmStatus(r){
   return "Failed";
 }
 function crmList(){
-  return S.rows.map(function(r){var st=crmStatus(r);return {id:(r.id||(""+r.brand)),brand:(r.brand||"").trim()||"Unknown",title:((r.auto&&r.auto.title)||"").trim(),email:(r.email||"").trim(),status:st,videos:(r.videos&&r.videos.length)||0};});
+  return S.rows.map(function(r){var st=crmStatus(r);return {id:String(r.id||(""+r.brand)),brand:(r.brand||"").trim()||"Unknown",title:((r.auto&&r.auto.title)||"").trim(),email:(r.email||"").trim(),status:st,videos:(r.videos&&r.videos.length)||0};});
 }
 function crmVisible(){
   var list=crmList();
@@ -464,7 +464,7 @@ $("fFailed").onclick=function(){filterCrm("failed")};
 $("findSel").onclick=function(){
   var ids=[];crmList().forEach(function(c){if(crmSelected.has(c.id))ids.push(c.id);});
   if(!ids.length){msg("Select at least one brand first.");return;}
-  var todo=S.rows.filter(function(r){return ids.indexOf(r.id)>=0&&r.status==="Pending"});
+  var todo=S.rows.filter(function(r){return ids.indexOf(String(r.id))>=0&&r.status==="Pending"});
   if(!todo.length){msg("Selected brands are already searched.");return;}
   var i=0;function next(){if(i>=todo.length){msg("Find Contacts done for selected brands.");drawCrm();return;}var r=todo[i++];msg("Finding contacts for "+esc(r.brand)+" ("+i+"/"+todo.length+")");enrich(r).then(next).catch(next);}
   next();
