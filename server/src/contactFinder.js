@@ -244,11 +244,14 @@ function createContactFinder(deps = {}) {
     const baseMeta = { domain, brand: brand || null, strategy: STRATEGIES.APOLLO };
     const rejected = [];
 
+    console.log(`[CONTACT FINDER] Apollo searchPeople start domain="${domain}"`);
+
     let people = [];
     let keywordFallback = false;
     try {
       const search = await apollo.searchPeople({ domain, titles, perPage: options.perPage || 10 });
       people = search.people;
+      console.log(`[CONTACT FINDER] Apollo searchPeople result domain="${domain}" people_found=${people.length}`);
       // A brand domain Apollo does not know: retry by company name keywords.
       if (!people.length && brand) {
         keywordFallback = true;
@@ -258,12 +261,14 @@ function createContactFinder(deps = {}) {
           perPage: options.perPage || 10
         });
         people = alt.people;
+        console.log(`[CONTACT FINDER] Apollo keyword fallback domain="${domain}" people_found=${people.length}`);
       }
     } catch (err) {
       if (err instanceof AppError && err.code === 'APOLLO_KEY_MISSING') throw err;
       if (logger) {
         logger.error('apollo people search failed', { domain, error: err.message, code: err.code });
       }
+      console.log(`[CONTACT FINDER] Apollo searchPeople error domain="${domain}" error="${err.message}" code="${err.code}"`);
       return buildResult({
         reason: REASONS.UPSTREAM_ERROR,
         message: `Apollo search failed: ${err.message}`,
@@ -281,7 +286,9 @@ function createContactFinder(deps = {}) {
     }
 
     const ranked = rankCandidates(people, { minScore: minTitleScore });
+    console.log(`[CONTACT FINDER] Apollo ranking domain="${domain}" ranked=${ranked.length} of ${people.length}`);
     if (!ranked.length) {
+      console.log(`[CONTACT FINDER] Apollo NO_PERSON_FOUND domain="${domain}"`);
       return buildResult({
         reason: REASONS.NO_PERSON_FOUND,
         message: `No influencer or partnership contact was found at ${domain}.`,
@@ -291,10 +298,12 @@ function createContactFinder(deps = {}) {
 
     // Shortlist the best titles, then only enrich the top few (each match = 1 credit).
     const shortlist = ranked.slice(0, maxCandidates);
+    console.log(`[CONTACT FINDER] Apollo shortlist domain="${domain}" shortlist=${JSON.stringify(shortlist.map(c => ({id: c.id, title: c.title, score: c.score, hasEmail: c.hasEmail})))}`);
     let fallback = null;
     let unverified = null;
 
     for (const candidate of shortlist.slice(0, maxEnriched)) {
+      console.log(`[CONTACT FINDER] Apollo enriching candidate domain="${domain}" id="${candidate.id}" title="${candidate.title || ''}"`);
       let person = null;
       try {
         const enriched = await apollo.enrichPerson({
@@ -308,9 +317,11 @@ function createContactFinder(deps = {}) {
         });
         person = enriched.person;
         if (enriched.matchConfidence === 'none') person = null;
+        console.log(`[CONTACT FINDER] Apollo enriched domain="${domain}" id="${candidate.id}" matchConfidence="${enriched.matchConfidence}" person=${person ? JSON.stringify({name: person.name, title: person.title, linkedin_url: person.linkedin_url}) : 'null'}`);
       } catch (err) {
         if (err instanceof AppError && err.code === 'APOLLO_KEY_MISSING') throw err;
         if (logger) logger.warn('apollo people/match failed', { domain, error: err.message });
+        console.log(`[CONTACT FINDER] Apollo enrich error domain="${domain}" id="${candidate.id}" error="${err.message}"`);
         continue;
       }
 
@@ -409,6 +420,7 @@ function createContactFinder(deps = {}) {
     };
 
     if (fallback) {
+      console.log(`[CONTACT FINDER] Apollo fallback domain="${domain}" email="${fallback.email}" is_fallback=true`);
       return buildResult({
         contact_name: fallback.contact_name,
         title: fallback.title,
@@ -424,6 +436,7 @@ function createContactFinder(deps = {}) {
     }
 
     if (unverified) {
+      console.log(`[CONTACT FINDER] Apollo unverified domain="${domain}" email="${unverified.email}" status="${unverified.status}"`);
       return buildResult({
         reason: REASONS.EMAIL_UNVERIFIED,
         email_status: unverified.status,
@@ -432,6 +445,7 @@ function createContactFinder(deps = {}) {
       });
     }
 
+    console.log(`[CONTACT FINDER] Apollo NO_EMAIL_FOUND domain="${domain}"`);
     return buildResult({
       reason: REASONS.NO_EMAIL_FOUND,
       message: `Apollo found contacts at ${domain} but Hunter could not find a verified email for them.`,
@@ -476,6 +490,8 @@ function createContactFinder(deps = {}) {
     if (apolloFailure) baseMeta.apollo_error = String(apolloFailure.message || apolloFailure);
     const rejected = [];
 
+    console.log(`[CONTACT FINDER] Hunter domainSearch start domain="${domain}"`);
+
     let search;
     try {
       search = await client.domainSearch({ domain, limit: domainSearchLimit });
@@ -487,11 +503,13 @@ function createContactFinder(deps = {}) {
         throw err;
       }
       if (isCreditLimitError(err)) {
+        console.log(`[CONTACT FINDER] Hunter credit limit domain="${domain}"`);
         return creditLimitResult({ ...baseMeta, elapsed_ms: now() - startedAt });
       }
       if (logger) {
         logger.error('hunter domain search failed', { domain, error: err.message, code: err.code });
       }
+      console.log(`[CONTACT FINDER] Hunter domainSearch error domain="${domain}" error="${err.message}" code="${err.code}"`);
       return buildResult({
         reason: REASONS.UPSTREAM_ERROR,
         message: `Hunter domain search failed: ${err.message}`,
@@ -500,6 +518,7 @@ function createContactFinder(deps = {}) {
     }
 
     const emails = search && Array.isArray(search.emails) ? search.emails : [];
+    console.log(`[CONTACT FINDER] Hunter domainSearch result domain="${domain}" emails_found=${emails.length} emails=${JSON.stringify(emails.map(e => ({email: e.email, position: e.position, firstName: e.firstName, lastName: e.lastName})))}`);
 
     // Named people with a matching title first, then other people, then role
     // mailboxes (info@, press@) which can only ever be a fallback.
@@ -539,6 +558,7 @@ function createContactFinder(deps = {}) {
     const preferred = named.filter((entry) => entry.score >= minTitleScore);
     const others = named.filter((entry) => entry.score < minTitleScore);
     const mailboxes = ranked.filter((entry) => entry.generic);
+    console.log(`[CONTACT FINDER] Hunter ranking domain="${domain}" named=${named.length} preferred=${preferred.length} others=${others.length} mailboxes=${mailboxes.length}`);
 
     // If Hunter only knows generic role mailboxes (info@, support@, hello@,
     // contact@), don't spend verification credits. Return Low Priority
@@ -546,6 +566,7 @@ function createContactFinder(deps = {}) {
     if (named.length === 0 && mailboxes.length > 0) {
       const generic = mailboxes[0];
       if (isStrictGenericEmail(generic.email)) {
+        console.log(`[CONTACT FINDER] Hunter returning Low Priority domain="${domain}" only generic mailbox="${generic.email}"`);
         return buildResult({
           title: generic.position || null,
           email: generic.email,
@@ -569,6 +590,7 @@ function createContactFinder(deps = {}) {
     let unverified = null;
     let paidVerifications = 0;
     const shortlist = [...preferred, ...others].slice(0, Math.max(maxCandidates, maxEmailsToVerify));
+    console.log(`[CONTACT FINDER] Hunter shortlist domain="${domain}" shortlist=${JSON.stringify(shortlist.map(e => ({email: e.email, position: e.position, score: e.score})))}`);
 
     // Several candidates? Let Gemini pick the influencer/partnership owner, then
     // verify that one first. Any Gemini failure keeps the Hunter ranking.
@@ -610,10 +632,12 @@ function createContactFinder(deps = {}) {
         paidVerifications += 1;
         try {
           verification = await client.verifyEmail(entry.email);
+          console.log(`[CONTACT FINDER] Hunter verify domain="${domain}" email="${entry.email}" result=${JSON.stringify(verification)}`);
         } catch (err) {
           if (err instanceof AppError && err.code === 'HUNTER_KEY_MISSING') throw err;
           if (isCreditLimitError(err)) return creditLimitResult(meta());
           if (logger) logger.warn('hunter verifier failed', { email: entry.email, error: err.message });
+          console.log(`[CONTACT FINDER] Hunter verify error domain="${domain}" email="${entry.email}" error="${err.message}"`);
           rejected.push({ email: entry.email, reason: 'verifier_error' });
           continue;
         }
@@ -622,10 +646,12 @@ function createContactFinder(deps = {}) {
       const status = emailStatusLabel(verification);
       if (!isAcceptedVerification(verification, verificationOptions())) {
         if (!unverified) unverified = { email: entry.email, status };
+        console.log(`[CONTACT FINDER] Hunter verification rejected domain="${domain}" email="${entry.email}" status="${status}"`);
         rejected.push({ email: entry.email, reason: `verification_${status}` });
         continue;
       }
 
+      console.log(`[CONTACT FINDER] Hunter VERIFIED domain="${domain}" email="${entry.email}" contact_name="${entry.fullName}" title="${entry.position || ''}" status="${status}"`);
       return buildResult({
         contact_name: entry.fullName,
         title: entry.position || null,
@@ -660,6 +686,7 @@ function createContactFinder(deps = {}) {
         rejected.push({ email: entry.email, reason: `verification_${status}` });
         continue;
       }
+      console.log(`[CONTACT FINDER] Hunter verified mailbox domain="${domain}" email="${entry.email}" status="${status}" is_fallback=true`);
       return buildResult({
         title: entry.position || null,
         email: entry.email,
@@ -674,6 +701,7 @@ function createContactFinder(deps = {}) {
     }
 
     if (unverified) {
+      console.log(`[CONTACT FINDER] Hunter unverified domain="${domain}" email="${unverified.email}" status="${unverified.status}"`);
       return buildResult({
         reason: REASONS.EMAIL_UNVERIFIED,
         email_status: unverified.status,
@@ -682,6 +710,7 @@ function createContactFinder(deps = {}) {
       });
     }
 
+    console.log(`[CONTACT FINDER] Hunter NO_EMAIL_FOUND domain="${domain}" emails_total=${emails.length}`);
     return buildResult({
       reason: REASONS.NO_EMAIL_FOUND,
       message: emails.length
@@ -708,25 +737,31 @@ function createContactFinder(deps = {}) {
     const rejected = [];
     const elapsed = () => now() - startedAt;
 
+    console.log(`[CONTACT FINDER] Prospeo searchPeople start domain="${domain}"`);
+
     let people = [];
     let searchedBy = 'domain';
     try {
       people = await client.searchPeople({ domain });
+      console.log(`[CONTACT FINDER] Prospeo searchPeople result domain="${domain}" people_found=${people.length}`);
       // A domain Prospeo does not know: retry with the brand name.
       if (!people.length && brand) {
         searchedBy = 'name';
         people = await client.searchPeople({ brand });
+        console.log(`[CONTACT FINDER] Prospeo brand fallback domain="${domain}" people_found=${people.length}`);
       }
     } catch (err) {
       if (err instanceof AppError && /^PROSPEO_(KEY_MISSING|BAD_INPUT|INVALID_KEY)$/.test(err.code)) {
         throw err;
       }
       if (isCreditLimitError(err)) {
+        console.log(`[CONTACT FINDER] Prospeo credit limit domain="${domain}"`);
         return creditLimitResult({ ...baseMeta, elapsed_ms: elapsed() }, 'prospeo');
       }
       if (logger) {
         logger.error('prospeo search failed', { domain, error: err.message, code: err.code });
       }
+      console.log(`[CONTACT FINDER] Prospeo search error domain="${domain}" error="${err.message}" code="${err.code}"`);
       return buildResult({
         reason: REASONS.UPSTREAM_ERROR,
         message: `Prospeo search failed: ${err.message}`,
@@ -761,6 +796,7 @@ function createContactFinder(deps = {}) {
     const preferred = ranked.filter((person) => person.score >= minTitleScore);
     const others = ranked.filter((person) => person.score < minTitleScore);
     const shortlist = [...preferred, ...others].slice(0, Math.max(maxCandidates, maxEnriched));
+    console.log(`[CONTACT FINDER] Prospeo ranking domain="${domain}" ranked=${ranked.length} shortlist=${shortlist.length}`);
 
     // Nobody has an address yet, so Gemini orders the shortlist by name + title.
     let ordered = shortlist;
@@ -797,6 +833,7 @@ function createContactFinder(deps = {}) {
     for (const person of ordered) {
       if (paid >= maxEmailsToVerify) break;
       paid += 1;
+      console.log(`[CONTACT FINDER] Prospeo enriching domain="${domain}" person="${person.fullName || person.personId}"`);
 
       let enriched;
       try {
@@ -809,6 +846,7 @@ function createContactFinder(deps = {}) {
           domain,
           brand
         });
+        console.log(`[CONTACT FINDER] Prospeo enriched domain="${domain}" person="${person.fullName || person.personId}" email="${enriched ? enriched.email : 'none'}" emailStatus="${enriched ? enriched.emailStatus : 'none'}"`);
       } catch (err) {
         if (
           err instanceof AppError &&
@@ -863,6 +901,7 @@ function createContactFinder(deps = {}) {
 
       if (!isAcceptedVerification(verification, verificationOptions())) {
         if (!unverified) unverified = { email: enriched.email, status };
+        console.log(`[CONTACT FINDER] Prospeo verification rejected domain="${domain}" email="${enriched.email}" status="${status}"`);
         rejected.push({ email: enriched.email, reason: `verification_${status}` });
         continue;
       }
@@ -882,6 +921,7 @@ function createContactFinder(deps = {}) {
         continue;
       }
 
+      console.log(`[CONTACT FINDER] Prospeo VERIFIED domain="${domain}" email="${enriched.email}" contact_name="${fullName}" title="${title || ''}" status="${status}"`);
       return buildResult({
         contact_name: fullName || null,
         title,
@@ -900,6 +940,7 @@ function createContactFinder(deps = {}) {
     }
 
     if (fallback) {
+      console.log(`[CONTACT FINDER] Prospeo fallback domain="${domain}" email="${fallback.email}" is_fallback=true`);
       return buildResult({
         contact_name: fallback.contact_name,
         title: fallback.title,
@@ -915,6 +956,7 @@ function createContactFinder(deps = {}) {
     }
 
     if (unverified) {
+      console.log(`[CONTACT FINDER] Prospeo unverified domain="${domain}" email="${unverified.email}" status="${unverified.status}"`);
       return buildResult({
         reason: REASONS.EMAIL_UNVERIFIED,
         email_status: unverified.status,
@@ -923,6 +965,7 @@ function createContactFinder(deps = {}) {
       });
     }
 
+    console.log(`[CONTACT FINDER] Prospeo NO_EMAIL_FOUND domain="${domain}" people_total=${people.length}`);
     return buildResult({
       reason: REASONS.NO_EMAIL_FOUND,
       message: `Prospeo listed ${people.length} person(s) at ${domain}, but none has a verified influencer or partnership email.`,
@@ -1077,10 +1120,14 @@ function createContactFinder(deps = {}) {
     // No key, no lookup: the owner's HUNTER_API_KEY is never used as a fallback.
     const clients = clientsFor(provider, apiKeyFor(request));
 
+    console.log(`[CONTACT FINDER] run() start domain="${domain}" brand="${brand || ''}" provider="${provider}"`);
+
     const scanned = await scanTextWithGemini(domain, brand, request.pageText);
     const fromText = classifyGeminiEmails(scanned, domain);
+    console.log(`[CONTACT FINDER] Gemini scan domain="${domain}" personal=${JSON.stringify(fromText.personal)} generic=${JSON.stringify(fromText.generic)}`);
     if (fromText.personal.length) {
       const email = fromText.personal[0];
+      console.log(`[CONTACT FINDER] Gemini found personal email "${email}" for domain="${domain}"`);
       return buildResult({
         email,
         email_status: 'unverified',
@@ -1105,6 +1152,7 @@ function createContactFinder(deps = {}) {
     if (fromText.generic.length && !fromText.personal.length) {
       const email = fromText.generic[0];
       if (isStrictGenericEmail(email)) {
+        console.log(`[CONTACT FINDER] Skipping provider search for domain="${domain}" — only generic mailbox "${email}" found`);
         return buildResult({
           email,
           email_status: 'unverified',
@@ -1126,6 +1174,7 @@ function createContactFinder(deps = {}) {
     }
 
     const result = await runStrategies(domain, brand, clients, startedAt);
+    console.log(`[CONTACT FINDER] runStrategies result domain="${domain}" found=${result.found} email="${result.email || ''}" reason="${result.reason || ''}" email_status="${result.email_status || ''}" is_fallback=${result.is_fallback}`);
     if (fromText.generic.length && !result.found && !result.is_fallback) {
       const email = fromText.generic[0];
       return buildResult({
