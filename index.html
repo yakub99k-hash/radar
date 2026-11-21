@@ -62,7 +62,30 @@ td input{min-width:200px;font-family:ui-monospace,monospace;font-size:.78rem}td 
 .blk{margin-top:12px;padding-top:10px;border-top:1px solid var(--ln);font-size:.84rem}.blk b{display:block;font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--mu);margin-bottom:3px}
 .blk code{font-size:.8rem;word-break:break-all}.guess{color:var(--warn);font-size:.72rem}.good{color:var(--ok)}
 .bc .act{margin-top:12px}.bc input.dm{margin-top:8px}.legal{color:var(--mu);font-size:.74rem;margin-top:20px}.legal a{color:var(--mu)}
-.blk small{display:block;margin-top:2px}</style>
+.blk small{display:block;margin-top:2px}
+/* ---- CRM contacts table ---- */
+.crm-card{margin-top:18px}
+.crm-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px;border-bottom:1px solid var(--ln);flex-wrap:wrap}
+.crm-head h2{margin:0 0 2px;font-size:1rem;letter-spacing:-.02em}
+.crm-filters{display:flex;gap:8px;flex-wrap:wrap}
+.crm-actions{display:flex;gap:8px;flex-wrap:wrap}
+.filter{border:1px solid var(--ln);background:var(--card2);color:var(--mu);padding:6px 12px;border-radius:8px;font-size:.84rem;cursor:pointer}
+.filter.active{background:var(--pr);color:var(--on);border-color:var(--pr)}
+.crm-table{width:100%;border-collapse:collapse;font-size:.88rem}
+.crm-table th{text-align:left;padding:11px 16px;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mu);font-weight:600;border-bottom:1px solid var(--ln);background:var(--card2);vertical-align:middle}
+.crm-table td{padding:11px 16px;border-bottom:1px solid var(--ln);vertical-align:middle}
+.crm-table tr:last-child td{border-bottom:0}
+.crm-table tr:hover{background:var(--card2)}
+.crm-name{font-weight:600;color:var(--tx)}
+.crm-role{color:var(--mu);font-size:.86rem}
+.crm-email{color:var(--tx);font-size:.86rem;word-break:break-all}
+.crm-status{display:flex;align-items:center;gap:6px}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:.76rem;font-weight:700;letter-spacing:.02em;border:1px solid transparent}
+.badge.ok{background:rgba(110,231,183,.15);color:var(--ok);border-color:rgba(110,231,183,.35)}
+.badge.bad{background:rgba(252,165,165,.15);color:var(--bad);border-color:rgba(252,165,165,.35)}
+.badge svg{width:12px;height:12px;display:block}
+.crm-empty{padding:34px;text-align:center;color:var(--mu);border:1px dashed var(--ln);border-radius:12px;background:var(--card2)}
+@media(max-width:640px){.crm-head{flex-direction:column;align-items:flex-start}.crm-actions{width:100%;justify-content:space-between}}</style>
 </head>
 <body>
 <section class="auth" id="auth">
@@ -140,6 +163,39 @@ td input{min-width:200px;font-family:ui-monospace,monospace;font-size:.78rem}td 
 <div id="msg" role="status"></div>
 </div>
 <div class="bar"><input id="q" placeholder="Search brand or channel..."><button class="btn g" id="all">Find contacts for all</button><button class="btn g" id="ask">Copy contact request for Claude</button><button class="btn g" id="csv">Download CSV</button><button class="btn g" id="wipe">Clear all</button></div>
+<!-- CRM contacts table -->
+<div class="card crm-card">
+  <div class="crm-head">
+    <div>
+      <h2>CRM Contacts</h2>
+      <p class="hint" style="margin:0">Contacts from your scans — verified vs failed</p>
+    </div>
+    <div class="crm-filters">
+      <button class="filter active" id="fAll">Show All</button>
+      <button class="filter" id="fVerified">Show Only Verified</button>
+      <button class="filter" id="fFailed">Show Failed</button>
+    </div>
+    <div class="crm-actions">
+      <button class="btn g" id="selAll">Select All Verified</button>
+      <button class="btn" id="expSel">Export Selected</button>
+    </div>
+  </div>
+  <div class="wrap">
+    <table class="crm-table">
+      <thead>
+        <tr>
+          <th style="width:44px"></th>
+          <th>Name</th>
+          <th>Title</th>
+          <th>Email</th>
+          <th style="width:160px">Status</th>
+        </tr>
+      </thead>
+      <tbody id="crmBody"></tbody>
+    </table>
+  </div>
+  <div id="crmEmpty" class="crm-empty" style="display:none">No contacts match the current filter.</div>
+</div>
 <div class="cards" id="cards"></div><div class="empty" id="empty">No brands yet. Paste a channel above and press SCAN.</div>
 <p class="legal">Emails are shown only when they are printed on the brand's own website, and the page is named under each one. Some sites hide their emails, so "not found" is possible. If a brand has no partnership or marketing address, the support address is shown instead. Uses YouTube API Services: <a href="https://www.youtube.com/t/terms" target="_blank" rel="noreferrer">YouTube Terms</a> and <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">Google Privacy Policy</a>.</p>
 </main>
@@ -327,7 +383,7 @@ function draw(){
     var a=mk("div",null,"act"),f=mk("button",r.busy?"Looking...":"Find contacts");f.disabled=!!r.busy;f.onclick=function(){enrich(r)};a.appendChild(f);
     var li=mk("a","Search on LinkedIn");li.href=r.linkedInSearchUrl||("https://www.linkedin.com/search/results/people/?keywords="+encodeURIComponent(r.brand+" Partnerships Manager"));li.target="_blank";li.rel="noreferrer";a.appendChild(li);
     var m=mk("a","Email Now");if(okEmail(r.email)){m.href="mailto:"+r.email+"?subject="+encodeURIComponent("An idea for "+r.brand+"'s next campaign")}else m.className="off";a.appendChild(m);
-    var d=mk("button","Remove");d.onclick=function(){S.rows=S.rows.filter(function(x){return x!==r});save();draw()};a.appendChild(d);c.appendChild(a);box.appendChild(c)})}
+    var d=mk("button","Remove");d.onclick=function(){S.rows=S.rows.filter(function(x){return x!==r});save();draw()};a.appendChild(d);c.appendChild(a);box.appendChild(c);drawCrm();})}
 $("q").oninput=draw;
 function q(v){return '"'+String(v==null?"":v).replace(/"/g,'""')+'"'}
 $("csv").onclick=function(){var h=["Brand","Domain","Channels","Sponsored videos","Codes","Partnership email (found)","Marketing email (found)","Support email (found)","Best contact","Best contact type","Found on page","Contact name","Contact email","linkedInSearchUrl","Status"],
@@ -339,6 +395,61 @@ hukStatus();
 prStatus();
 provStatus();
 
+/* ---------- CRM contacts table ---------- */
+function esc(t){return String(t==null?"":t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
+var crmFilter="all", crmSelected=new Set();
+function crmList(){
+  return S.rows.map(function(r){
+    var em=(r.email||"").trim();
+    var st=r.status;if(st!=="verified"&&st!=="failed")st=okEmail(em)?"verified":"failed";return {id:(r.id||(""+r.brand)),name:(r.cname||r.brand||"").trim()||"Unknown",title:((r.auto&&r.auto.title)||"").trim(),email:em,status:st};
+  });
+}
+function crmVisible(){
+  var list=crmList();
+  if(crmFilter==="verified")return list.filter(function(c){return c.status==="verified"});
+  if(crmFilter==="failed")return list.filter(function(c){return c.status==="failed"});
+  return list;
+}
+function badgeHtml(c){
+  var ok=c.status==="verified",icon;
+  if(ok)icon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>Verified</span>';
+  else icon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>'+(c.status==="failed"?"Failed":"Invalid")+'</span>';
+  return '<span class="badge '+(ok?"ok":"bad")+'">'+icon+'</span>';
+}
+function drawCrm(){
+  var body=$("crmBody"),list=crmVisible(),empty=$("crmEmpty");
+  body.innerHTML="";if(empty)empty.style.display=list.length?"none":"block";
+  list.forEach(function(c){
+    var checked=crmSelected.has(c.id)?"checked":"";
+    var tr=document.createElement("tr");
+    tr.innerHTML='<td><label style="display:flex;align-items:center;margin:0;height:100%"><input type="checkbox" class="crm-checkbox" data-id="'+esc(c.id)+'" '+checked+'></label></td>'+
+      '<td><div class="crm-name">'+esc(c.name)+'</div></td>'+
+      '<td><div class="crm-role">'+(c.title?esc(c.title):'<span style="color:var(--mu)">—</span>')+'</div></td>'+
+      '<td><div class="crm-email">'+(c.email?esc(c.email):'<span style="color:var(--mu)">—</span>')+'</div></td>'+
+      '<td><div class="crm-status">'+badgeHtml(c)+'</div></td>';
+    body.appendChild(tr);
+  });
+  body.querySelectorAll(".crm-checkbox").forEach(function(el){
+    el.onchange=function(){var id=el.getAttribute("data-id");if(el.checked)crmSelected.add(id);else crmSelected.delete(id);};
+  });
+}
+function filterCrm(f){
+  crmFilter=f;crmSelected=new Set();drawCrm();
+  $("fAll").classList.toggle("active",f==="all");$("fVerified").classList.toggle("active",f==="verified");$("fFailed").classList.toggle("active",f==="failed");
+}
+$("fAll").onclick=function(){filterCrm("all")};
+$("fVerified").onclick=function(){filterCrm("verified")};
+$("fFailed").onclick=function(){filterCrm("failed")};
+$("selAll").onclick=function(){
+  crmSelected=new Set();crmList().filter(function(c){return c.status==="verified"}).forEach(function(c){crmSelected.add(c.id);});drawCrm();
+};
+$("expSel").onclick=function(){
+  var sel=[];crmList().forEach(function(c){if(crmSelected.has(c.id))sel.push(c);});
+  var emails=sel.filter(function(c){return c.email}).map(function(c){return c.email});
+  console.log("CRM Export Selected contacts:",sel);
+  console.log("CRM Export Selected emails:",emails);
+  msg("Export Selected: logged "+emails.length+" email(s) to the console.");
+};
 /* ---------- ACCOUNTS (Firebase Authentication) ---------- */
 /* PASTE YOUR FIREBASE SETTINGS HERE (see the setup steps). Leave the quotes. */
 var FIREBASE_CONFIG={apiKey:"AIzaSyD6KOk-i1Ke6t2-gQkAHIAZj9xP6lax-ZA",authDomain:"yaqubu-radar.firebaseapp.com",projectId:"yaqubu-radar",storageBucket:"yaqubu-radar.firebasestorage.app",messagingSenderId:"1039339020920",appId:"1:1039339020920:web:fc7b7376f92c62ad31838d"};
