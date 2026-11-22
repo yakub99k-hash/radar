@@ -14,6 +14,9 @@ main{max-width:1180px;margin:0 auto;padding:28px 16px 70px}
 h1{font-size:clamp(1.7rem,4vw,2.3rem);letter-spacing:-.03em;margin:0}
 .sub{color:var(--mu);margin:4px 0 14px}
 .banner{display:inline-block;border:1px solid var(--ln);background:var(--card);border-radius:8px;padding:6px 12px;font-size:.8rem;color:var(--mu)}
+.api-limit-banner{display:none;margin:16px 0;padding:18px 22px;border-radius:12px;background:rgba(252,165,165,.15);border:1px solid var(--bad);color:#fff;font-size:1rem;font-weight:700;line-height:1.5;box-shadow:0 4px 12px rgba(252,165,165,.25)}
+.api-limit-banner.show{display:block}
+.api-limit-banner .key{display:block;margin-top:10px;font-weight:500;opacity:.95}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:22px 0}
 .card{background:var(--card);border:1px solid var(--ln);border-radius:14px;padding:18px;margin-bottom:14px}
 .stat{margin:0}.stat b{display:block;font-size:1.9rem;letter-spacing:-.02em}.stat span{color:var(--mu);font-size:.85rem}
@@ -89,6 +92,7 @@ td input{min-width:200px;font-family:ui-monospace,monospace;font-size:.78rem}td 
 .badge.failed{background:rgba(252,165,165,.12);color:var(--bad);border-color:rgba(252,165,165,.4)}
 .badge.low{background:rgba(252,211,77,.14);color:var(--warn);border-color:rgba(252,211,77,.45)}
 .badge.risky{background:rgba(251,146,60,.16);color:var(--warn);border-color:rgba(251,146,60,.5)}
+.badge.error{background:rgba(252,165,165,.15);color:var(--bad);border-color:rgba(252,165,165,.4)}
 .badge.pending{background:rgba(161,161,170,.12);color:var(--mu);border-color:rgba(161,161,170,.35)}
 .badge svg{width:11px;height:11px;display:block}
 .crm-empty{padding:48px 24px;text-align:center;color:var(--mu);border:1px dashed var(--ln);border-radius:16px;background:var(--card2)}
@@ -170,6 +174,7 @@ td input{min-width:200px;font-family:ui-monospace,monospace;font-size:.78rem}td 
 <div class="scanrow"><input id="ch" placeholder="Paste YouTube Channel @handle or URL"><button class="btn" id="scanBtn">SCAN</button></div>
 <div class="prog" id="prog" hidden><div id="fill"></div></div><div id="ptxt" class="hint" style="margin-top:6px"></div>
 <div id="msg" role="status"></div>
+<div id="apiLimitBanner" class="api-limit-banner">API Limit Reached. Please update your API key.<span class="key">The backend can't search contacts until your Hunter/Prospeo API key is added.</span></div>
 </div>
 <div class="bar"><input id="q" placeholder="Search brand or channel..."><button class="btn g" id="all">Find contacts for all</button><button class="btn g" id="ask">Copy contact request for Claude</button><button class="btn g" id="csv">Download CSV</button><button class="btn g" id="wipe">Clear all</button></div>
 <div class="card crm-card">
@@ -336,6 +341,7 @@ function autoContact(dom,brand,text){
 function applyAuto(r,a){
   if(!a)return;
   r.auto=a;
+  if(a.reason==="HUNTER_CREDIT_LIMIT"){var b=$("apiLimitBanner");if(b){b.classList.add("show");b.querySelector(".key").textContent=a.message||"API Limit Reached. Please update your API key."}}
   var viaAI=a.email_source==="gemini";
   var viaP=(a.meta&&a.meta.provider)==="prospeo"?"Prospeo":"Hunter";
   if(a.is_fallback&&!okEmail(r.email)&&a.email){r.email=a.email;r.emailType=viaAI?"Gemini (generic mailbox)":"Auto (generic mailbox)"}
@@ -418,6 +424,7 @@ function crmStatus(r){
   if(st==="Pending")return "Pending";
   var at=em.lastIndexOf("@"), mb=at>0?em.slice(0,at).toLowerCase():"";
   var generic=GENERIC_MAIL.test(mb) || /^(info|support|help|hello|contact|sales|press|media|pr|marketing|partners?|team|office|admin)[._-]/.test(mb);
+  if(a.reason==="HUNTER_CREDIT_LIMIT")return "Error";
   if(a.is_fallback||a.reason==="GENERIC_EMAIL"||generic)return "Low Priority";
   if(a.found&&em&&(a.email_status==="valid"||a.email_status==="deliverable"||!a.email_status))return "verified";
   if(a.found&&em&&a.email_status==="risky")return "Risky";
@@ -429,13 +436,13 @@ function crmList(){
 function crmVisible(){
   var list=crmList();
   if(crmFilter==="verified")return list.filter(function(c){return c.status==="verified"});
-  if(crmFilter==="failed")return list.filter(function(c){return c.status==="Failed"||c.status==="Low Priority"});
+  if(crmFilter==="failed")return list.filter(function(c){return c.status==="Failed"||c.status==="Low Priority"||c.status==="Error"});
   return list;
 }
 function badgeHtml(c){
-  var s=c.status, lab=s==="Low Priority"?"Low Priority":(s==="verified"?"Verified":(s==="Risky"?"Risky":(s==="Failed"?"Failed":"Pending"))),
-      cls=s==="verified"?"verified":(s==="Failed"?"failed":(s==="Low Priority"?"low":(s==="Risky"?"risky":"pending")));
-  var icons={verified:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',failed:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',low:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 10H3L8 15"/></svg>',risky:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',pending:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56L23 7"/></svg>'};
+  var s=c.status, lab=s==="Low Priority"?"Low Priority":(s==="verified"?"Verified":(s==="Risky"?"Risky":(s==="Error"?"Error":(s==="Failed"?"Failed":"Pending")))),
+      cls=s==="verified"?"verified":(s==="Failed"?"failed":(s==="Low Priority"?"low":(s==="Risky"?"risky":(s==="Error"?"error":"pending"))));
+  var icons={verified:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',failed:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',low:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 10H3L8 15"/></svg>',risky:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',error:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',pending:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56L23 7"/></svg>'};
   return '<span class="badge '+cls+'">'+(icons[s]||icons.pending)+'<span>'+esc(lab)+'</span></span>';
 }
 function drawCrm(){
